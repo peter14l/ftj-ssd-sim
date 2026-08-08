@@ -1,0 +1,43 @@
+# Build output directories
+build/
+out/
+cmake-build-*/
+*.vcxproj.user
+*.sln
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+Makefile
+_deps/
+
+# Compiled binaries
+*.exe
+*.dll
+*.lib
+*.pdb
+*.obj
+*.exp
+*.ilk
+
+# Scratch / temp
+scratch/
+
+# IDE / editor artifacts
+.vs/
+.vscode/
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+*.opensdf
+*.sdf
+*.ipch
+
+# Windows artifacts
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# Logs & local test output
+*.log
