@@ -53,40 +53,40 @@ This framework bridges those hardware properties with user-space software via **
 ## Architecture & Memory Flow
 
 ```text
-╔══════════════════════════════════════════════════════════════════╗
-║          User Application / FIO Benchmark / Database            ║
-╚═════════════════════════════╦════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════╗
+║        User Application / FIO Benchmark / Database          ║
+╚═════════════════════════════╦════════════════════════════════╝
                               ║  Standard Win32 File I/O API
                               ▼
-╔══════════════════════════════════════════════════════════════════╗
-║          Windows I/O Manager + WinFSP Kernel FSD (Ring-0)       ║
-╚═════════════════════════════╦════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════╗
+║        Windows I/O Manager + WinFSP Kernel FSD (Ring-0)     ║
+╚═════════════════════════════╦════════════════════════════════╝
                               ║  User-Kernel Dispatch (IRP ──► FSP)
                               ▼
-╔══════════════════════════════════════════════════════════════════╗
-║       ftj_vdisk_srv.exe  ──  User-Space Daemon (Ring-3)         ║
-║                                                                  ║
-║    [ FSP_FILE_SYSTEM_INTERFACE Callback Vector (C++20) ]        ║
-║      GetVolumeInfo │ Open │ Read │ Write │ ReadDirectory ...     ║
-╚═════════════════════════════╦════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════╗
+║     ftj_vdisk_srv.exe  ──  User-Space Daemon (Ring-3)        ║
+║                                                              ║
+║   [ FSP_FILE_SYSTEM_INTERFACE Callback Vector (C++20) ]      ║
+║     GetVolumeInfo │ Open │ Read │ Write │ ReadDirectory ...   ║
+╚═════════════════════════════╦════════════════════════════════╝
                               ║  Direct in-process function call
                               ▼
-╔══════════════════════════════════════════════════════════════════╗
-║          Lock-Free MPMC Ring Buffer  (LockFreeRingBuffer)        ║
-║                                                                  ║
-║   Submission Queue ──► [ Atomic Head/Tail ] ──► Completion Queue ║
-║          Dmitriy Vyukov MPMC Algorithm — Zero Lock Contention   ║
-╚═════════════════════════════╦════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════╗
+║        Lock-Free MPMC Ring Buffer  (LockFreeRingBuffer)      ║
+║                                                              ║
+║   Submission Queue ──► [ Atomic Head/Tail ] ──► Completion   ║
+║        Dmitriy Vyukov MPMC — Zero Lock Contention            ║
+╚═════════════════════════════╦════════════════════════════════╝
                               ║  TSC-calibrated busy-wait loop
                               ▼
-╔══════════════════════════════════════════════════════════════════╗
-║      FTJController  ──  In-Memory Simulation Backend            ║
-║                                                                  ║
-║  LatencyInjector::Calibrate()  ──  rdtsc / rdtscp precision     ║
-║  Read Path:  8 ns  physical gate switching simulation           ║
-║  Write Path: 300 ns polarization flip simulation                ║
-║  Backing Store: SRAM / RAM allocation (128 MiB default)         ║
-╚══════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════╗
+║        FTJController  ──  In-Memory Simulation Backend       ║
+║                                                              ║
+║   LatencyInjector::Calibrate()  ──  rdtsc / rdtscp           ║
+║   Read Path:  8 ns   physical gate switching simulation      ║
+║   Write Path: 300 ns polarization flip simulation            ║
+║   Backing Store: SRAM / RAM allocation (128 MiB default)     ║
+╚══════════════════════════════════════════════════════════════╝
 ```
 
 ---
@@ -259,11 +259,11 @@ fio --name=ftj_mixed ^
 ## Future Roadmap
 
 ```text
-  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-  │   PHASE 1 ✅     │    │   PHASE 2 🔄     │    │   PHASE 3 📋     │    │   PHASE 4 🚀     │
-  │  Core Engine     │───►│  IP & Startup    │───►│  Hardware Sim    │───►│  Commercial      │
-  │  WinFSP Driver   │    │  Launch          │    │  Telemetry       │    │  Licensing       │
-  └──────────────────┘    └──────────────────┘    └──────────────────┘    └──────────────────┘
+  ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐
+  │   PHASE 1 ✅     │      │   PHASE 2 🔄     │      │   PHASE 3 📋     │      │   PHASE 4 🚀     │
+  │  Core Engine     │ ───► │  IP & Startup    │ ───► │  Hardware Sim    │ ───► │  Commercial      │
+  │  WinFSP Driver   │      │  Launch          │      │  Telemetry       │      │  Licensing       │
+  └──────────────────┘      └──────────────────┘      └──────────────────┘      └──────────────────┘
 ```
 
 ### Phase 2 — IP Protection & Startup Launch *(Current Focus)*
