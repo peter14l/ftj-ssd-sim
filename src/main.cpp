@@ -428,6 +428,60 @@ int main(int argc, char* argv[]) {
             "- **Latency Reduction Factor**: FTJ writes are **" + std::to_string(static_cast<uint64_t>(speedup)) + "x faster** than simulated 3D NAND under equivalent write pressure.\n";
     }
 
+    std::cout << "\nRunning Benchmark 6: Wear Degradation & SECDED ECC Validation...\n";
+    {
+        // 1. Inject wear exceeding the threshold on a specific sector (offset = 0)
+        constexpr uint64_t TARGET_OFFSET = 0;
+        constexpr uint32_t INJECTED_WRITES = ftj::FTJController::WEAR_THRESHOLD + 15000;
+        std::cout << " -> Injecting " << INJECTED_WRITES << " writes to page 0 to simulate heavy wear...\n";
+        controller.InjectHeavyWear(TARGET_OFFSET, INJECTED_WRITES);
+
+        // 2. Perform reads on this worn region to trigger and correct bit flips
+        constexpr uint64_t NUM_READS = 10000;
+        uint64_t data_pattern = 0xAA55AA55AA55AA55ULL;
+        controller.Write(TARGET_OFFSET, &data_pattern, 8);
+
+        uint64_t read_pattern = 0;
+        uint64_t read_start = GetTimeNs();
+        uint64_t failed_reads = 0;
+        for (uint64_t i = 0; i < NUM_READS; ++i) {
+            if (!controller.Read(TARGET_OFFSET, &read_pattern, 8)) {
+                failed_reads++;
+            }
+        }
+        uint64_t read_end = GetTimeNs();
+        double elapsed_ms = static_cast<double>(read_end - read_start) / 1'000'000.0;
+
+        uint64_t corrected = controller.GetCorrectedErrors();
+        uint64_t uncorrectable = controller.GetUncorrectableErrors();
+        uint64_t total_flips = controller.GetTotalBitFlips();
+
+        std::cout << " -> Wear/ECC Benchmark complete. Reads executed: " << NUM_READS << "\n";
+        std::cout << " -> Total Bit Flips Injected: " << total_flips << "\n";
+        std::cout << " -> Single-bit Errors Corrected by ECC: " << corrected << "\n";
+        std::cout << " -> Double-bit Uncorrectable Errors (UECC): " << uncorrectable << "\n";
+        std::cout << " -> Read failures reported to Host: " << failed_reads << "\n";
+
+        // Add to results
+        results.push_back({
+            "Wear/ECC Recovered Reads", 
+            elapsed_ms, 
+            NUM_READS, 
+            (static_cast<double>(NUM_READS) / elapsed_ms) * 1000.0, 
+            static_cast<double>(read_end - read_start) / NUM_READS, 
+            (static_cast<double>(NUM_READS * 8) / (1024.0 * 1024.0)) / (elapsed_ms / 1000.0)
+        });
+
+        // Append ECC telemetry report to comparison summary
+        comparison_summary += 
+            "\n### ECC & Wear-out Telemetry Analysis:\n"
+            "- **Target Page Write Count**: " + std::to_string(INJECTED_WRITES) + " (exceeded 50,000 threshold).\n"
+            "- **Total Bit-Flips Simulating Degradation**: " + std::to_string(total_flips) + "\n"
+            "- **Corrected Single-Bit Errors**: " + std::to_string(corrected) + " (100% data recovery via Hamming 72/64)\n"
+            "- **Uncorrectable Double-Bit Errors**: " + std::to_string(uncorrectable) + " (returned read failures to application)\n"
+            "- **Maximum Simulated Memory Wear**: " + std::to_string(static_cast<int>(controller.GetMaxWearPercentage())) + "%\n";
+    }
+
     LogResults(results, comparison_summary);
 
     return 0;

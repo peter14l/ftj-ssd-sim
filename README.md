@@ -54,12 +54,12 @@ This framework bridges those hardware properties with user-space software via **
 
 ```text
 ╔══════════════════════════════════════════════════════════════╗
-║        User Application / FIO Benchmark / Database          ║
+║        User Application / FIO Benchmark / Database           ║
 ╚═════════════════════════════╦════════════════════════════════╝
                               ║  Standard Win32 File I/O API
                               ▼
 ╔══════════════════════════════════════════════════════════════╗
-║        Windows I/O Manager + WinFSP Kernel FSD (Ring-0)     ║
+║        Windows I/O Manager + WinFSP Kernel FSD (Ring-0)      ║
 ╚═════════════════════════════╦════════════════════════════════╝
                               ║  User-Kernel Dispatch (IRP ──► FSP)
                               ▼
@@ -67,7 +67,7 @@ This framework bridges those hardware properties with user-space software via **
 ║     ftj_vdisk_srv.exe  ──  User-Space Daemon (Ring-3)        ║
 ║                                                              ║
 ║   [ FSP_FILE_SYSTEM_INTERFACE Callback Vector (C++20) ]      ║
-║     GetVolumeInfo │ Open │ Read │ Write │ ReadDirectory ...   ║
+║     GetVolumeInfo │ Open │ Read │ Write │ ReadDirectory ...  ║
 ╚═════════════════════════════╦════════════════════════════════╝
                               ║  Direct in-process function call
                               ▼
@@ -288,6 +288,9 @@ fio --name=ftj_mixed ^
 - [ ] **WAL Acceleration Package:** Certified integration guides and pre-built modules for PostgreSQL, MySQL, and RocksDB WAL-path acceleration.
 - [ ] **CXL Tiering Partners:** Enterprise evaluation pilots with memory-pooling OEM vendors (targeting CXL 2.0 / 3.0 fabrics).
 - [ ] **SDS SDK Release:** Software-Defined Storage SDK enabling third-party controller firmware emulation on commodity server hardware.
+- [ ] **Persistent Memory Sticks (NVDIMM/CXL RAM):** Expand controller Verilog designs to support:
+  - **NVDIMM Architecture**: Fitting standard DDR4/DDR5 slots by tricking the host CPU memory controller and disabling DRAM refresh cycles.
+  - **CXL Type-3 Memory Expansion**: Implementing memory pool expansion over standard PCIe slots to combat hardware inflation.
 
 ---
 

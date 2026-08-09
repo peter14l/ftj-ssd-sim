@@ -45,10 +45,10 @@ public:
     FTJController(FTJController&&) noexcept = default;
     FTJController& operator=(FTJController&&) noexcept = default;
 
-    // Byte-addressable read operation with exact latency injection
+    // Byte-addressable read operation with exact latency injection and ECC validation
     bool Read(uint64_t offset, void* dest, size_t size) const noexcept;
 
-    // Byte-addressable write operation with exact latency injection and zero overhead
+    // Byte-addressable write operation with exact latency injection, wear updates, and ECC generation
     bool Write(uint64_t offset, const void* src, size_t size) noexcept;
 
     // Retrieve stats
@@ -57,15 +57,33 @@ public:
     uint64_t GetTotalWrites() const noexcept { return total_writes_; }
     uint64_t GetLatencyNs() const noexcept { return latency_ns_; }
 
+    // ECC & Wear Telemetry API
+    uint64_t GetCorrectedErrors() const noexcept { return corrected_errors_; }
+    uint64_t GetUncorrectableErrors() const noexcept { return uncorrectable_errors_; }
+    uint64_t GetTotalBitFlips() const noexcept { return total_bit_flips_; }
+    double GetMaxWearPercentage() const noexcept;
+    void InjectHeavyWear(uint64_t offset, uint32_t write_count) noexcept;
+
+    // Static ECC Helpers
+    static uint8_t CalculateECC(uint64_t data) noexcept;
+    static int DecodeAndCorrect(uint64_t& data, uint8_t stored_ecc) noexcept;
+
+    static constexpr uint32_t WEAR_THRESHOLD = 50000; // Simulated threshold before bit degradation
+
 private:
     size_t capacity_;
     uint64_t latency_ns_;
     std::unique_ptr<uint8_t[]> memory_buffer_;
+    std::unique_ptr<uint8_t[]> ecc_buffer_;          // Stores 1 byte of ECC per 8-byte chunk
+    std::vector<uint32_t> page_writes_;              // Tracks write counts per 4KB page
     LatencyInjector injector_;
 
-    // Performance counters for basic stats
+    // Performance & ECC counters
     mutable uint64_t total_reads_ = 0;
     uint64_t total_writes_ = 0;
+    mutable std::atomic<uint64_t> corrected_errors_{0};
+    mutable std::atomic<uint64_t> uncorrectable_errors_{0};
+    mutable std::atomic<uint64_t> total_bit_flips_{0};
 };
 
 // --- NVMe Queue structures ---
