@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FTJ Memory Engine: Interactive Simulation Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #07090e;
+            --panel-bg: rgba(13, 18, 30, 0.7);
+            --panel-border: rgba(30, 41, 59, 0.5);
+            --primary: #00f0ff;
+            --primary-glow: rgba(0, 240, 255, 0.4);
+            --secondary: #ff007f;
+            --accent: #39ff14;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --pcb-green: #0a2f1d;
+            --pcb-trace: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(0, 240, 255, 0.05) 0px, transparent 50%),
+                radial-gradient(at 90% 80%, rgba(255, 0, 127, 0.05) 0px, transparent 50%);
+            min-height: 100vh;
+        }
+
+        header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(7, 9, 14, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            position: sticky;
+            top: 0;
+        }
+
+        .logo-section h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 800;
+            font-size: 1.5rem;
+            letter-spacing: 1px;
+            background: linear-gradient(90deg, var(--primary), #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-section p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: var(--accent);
+            padding: 0.4rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 10px var(--accent); }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
+
+        main {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 2rem;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .panel:hover {
+            border-color: rgba(0, 240, 255, 0.2);
+        }
+
+        .panel-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 1.2rem;
+            border-left: 3px solid var(--primary);
+            padding-left: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .control-group {
+            margin-bottom: 1.2rem;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .workload-btn {
+            width: 100%;
+            padding: 0.8rem;
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-family: inherit;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.6rem;
+        }
+
+        .workload-btn:hover {
+            background: rgba(30, 41, 59, 0.8);
+            border-color: var(--primary);
+        }
+
+        .workload-btn.active {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(168, 85, 247, 0.2));
+            border-color: var(--primary);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+        }
+
+        .workload-btn::after {
+            content: '→';
+            opacity: 0.5;
+            transition: transform 0.2s;
+        }
+
+        .workload-btn.active::after {
+            transform: translateX(3px);
+            opacity: 1;
+            color: var(--primary);
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        input[type="range"] {
+            flex-weight: 1;
+            width: 100%;
+            accent-color: var(--primary);
+            background: #1e293b;
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .slider-val {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            color: var(--primary);
+            min-width: 45px;
+            text-align: right;
+        }
+
+        .metric-tile {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .metric-tile:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .metric-value {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .metric-value.highlight {
+            color: var(--primary);
+            text-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        .dashboard-main {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* Interactive M.2 SSD Render */
+        .ssd-container {
+            width: 100%;
+            height: 320px;
+            background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8);
+        }
+
+        .ssd-board {
+            width: 780px;
+            height: 200px;
+            background: #0f172a;
+            border: 4px solid #1e293b;
+            border-radius: 8px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+        }
+
+        .pcb-details {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(rgba(16, 185, 129, 0.03) 1px, transparent 0),
+                linear-gradient(rgba(16, 185, 129, 0.02) 1px, transparent 0);
+            background-size: 24px 24px, 48px 48px;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .gold-pins {
+            position: absolute;
+            left: 0;
+            width: 25px;
+            height: 120px;
+            background: repeating-linear-gradient(
+                to bottom,
+                #d97706 0px,
+                #d97706 3px,
+                transparent 3px,
+                transparent 6px
+            );
+            border-right: 2px solid #b45309;
+            z-index: 2;
+        }
+
+        .gold-pins.active::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--primary);
+            opacity: 0.3;
+            animation: blink 0.2s infinite;
+        }
+
+        @keyframes blink {
+            0% { opacity: 0.1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 0.1; }
+        }
+
+        .controller-chip {
+            width: 130px;
+            height: 130px;
+            background: linear-gradient(135deg, #475569, #1e293b);
+            border: 4px solid #94a3b8;
+            border-radius: 12px;
+            position: absolute;
+            left: 150px;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.6);
+            transition: border-color 0.3s;
+        }
+
+        .controller-chip.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 25px var(--primary-glow);
+            animation: controller-beat 1s infinite alternate;
+        }
+
+        @keyframes controller-beat {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.02); }
+        }
+
+        .controller-chip h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1rem;
+            letter-spacing: 1px;
+            color: #e2e8f0;
+        }
+
+        .controller-chip span {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            margin-top: 0.2rem;
+        }
+
+        /* Animated Circuit Traces (Data Lanes) */
+        .data-lane {
+            position: absolute;
+            height: 4px;
+            background: rgba(16, 185, 129, 0.2);
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .data-lane::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 20px;
+            background: var(--primary);
+            box-shadow: 0 0 8px var(--primary);
+            opacity: 0;
+        }
+
+        .data-lane.active::after {
+            opacity: 1;
+            animation: data-flow 1.5s linear infinite;
+        }
+
+        @keyframes data-flow {
+            0% { left: 0%; }
+            100% { left: 100%; }
+        }
+
+        .lane-main-in {
+            left: 25px;
+            width: 125px;
+            top: 100px;
+        }
+
+        .lane-to-mem1 { left: 280px; width: 100px; top: 70px; }
+        .lane-to-mem2 { left: 280px; width: 220px; top: 100px; }
+        .lane-to-mem3 { left: 280px; width: 340px; top: 130px; }
+
+        .memory-chips-container {
+            position: absolute;
+            right: 40px;
+            display: flex;
+            gap: 20px;
+            z-index: 4;
+        }
+
+        .mem-chip {
+            width: 100px;
+            height: 140px;
+            background: #111827;
+            border: 2px solid #374151;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 10px;
+            position: relative;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+
+        .mem-chip.active {
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .chip-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .chip-wear-bar {
+            width: 100%;
+            height: 4px;
+            background: #1f2937;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: auto;
+        }
+
+        .chip-wear-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--accent);
+            transition: width 0.3s, background-color 0.3s;
+        }
+
+        .chip-status-text {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent);
+            text-align: right;
+        }
+
+        .chip-temp-glow {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 6px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+            box-shadow: inset 0 0 20px rgba(255, 0, 127, 0.5);
+        }
+
+        /* Graphs & Real-time Telemetry Section */
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+        }
+
+        .telemetry-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 200px;
+            position: relative;
+        }
+
+        .svg-chart {
+            width: 100%;
+            height: 100%;
+        }
+
+        .chart-line {
+            fill: none;
+            stroke: var(--primary);
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            transition: d 0.1s ease;
+        }
+
+        .chart-area {
+            fill: url(#chart-gradient);
+            transition: d 0.1s ease;
+        }
+
+        .chart-grid-line {
+            stroke: rgba(255, 255, 255, 0.03);
+            stroke-width: 1;
+        }
+
+        /* Thermal Panel Styling */
+        .thermal-radial {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 1rem auto;
+            position: relative;
+        }
+
+        .radial-bg {
+            fill: none;
+            stroke: #1e293b;
+            stroke-width: 8;
+        }
+
+        .radial-progress {
+            fill: none;
+            stroke: var(--primary);
+            stroke-width: 8;
+            stroke-dasharray: 283;
+            stroke-dashoffset: 283;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+            transition: stroke-dashoffset 0.5s, stroke 0.5s;
+        }
+
+        .radial-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .thermal-status {
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--accent);
+        }
+
+        .warning-active {
+            color: var(--secondary) !important;
+            animation: flash 1s infinite alternate;
+        }
+
+        @keyframes flash {
+            0% { opacity: 0.5; }
+            100% { opacity: 1; text-shadow: 0 0 10px rgba(255, 0, 127, 0.5); }
+        }
+
+        /* Queue Depth stack graphic */
+        .queue-stack {
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 3px;
+            height: 100px;
+            width: 60px;
+            margin: 0 auto;
+            background: #0f172a;
+            border: 2px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 3px;
+        }
+
+        .queue-block {
+            height: 8px;
+            width: 100%;
+            background: #1e293b;
+            border-radius: 1px;
+            transition: background-color 0.2s;
+        }
+
+        .queue-block.active {
+            background-color: var(--primary);
+            box-shadow: 0 0 4px var(--primary-glow);
+        }
+
+        .layout-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-section">
+            <h1>FTJ MEMORY EMULATOR</h1>
+            <p>Byte-Addressable High-Precision Hardware Simulation Dashboard</p>
+        </div>
+        <div class="status-badge">
+            <div class="status-dot"></div>
+            <span>SIMULATOR STANDBY</span>
+        </div>
+    </header>
+
+    <main>
+        <!-- Sidebar Controls -->
+        <section class="sidebar">
+            <div class="panel">
+                <h2 class="panel-title">Workload Generator</h2>
+                <button class="workload-btn active" onclick="setWorkload('idle', this)">
+                    <span>System Idle</span>
+                </button>
+                <button class="workload-btn" onclick="setWorkload('sequential', this)">
+                    <span>Sequential Writes (4K)</span>
+                </button>
+                <button class="workload-btn" onclick="setWorkload('random', this)">
+                    <span>Random 4K Reads</span>
+                </button>
+                <button class="workload-btn" onclick="setWorkload('ai', this)">
+                    <span>AI KV-Cache / Vector DB</span>
+                </button>
+                <button class="workload-btn" onclick="setWorkload('stress', this)">
+                    <span>Aggressive Wear Stress Test</span>
+                </button>
+            </div>
+
+            <div class="panel">
+                <h2 class="panel-title">Sim Settings</h2>
+                <div class="control-group">
+                    <label>Simulated Queue Depth</label>
+                    <div class="slider-container">
+                        <input type="range" min="1" max="64" value="1" id="qd-slider" oninput="updateQD(this.value)">
+                        <span class="slider-val" id="qd-val">QD-1</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Accelerate Memory Wear-out</label>
+                    <div class="slider-container">
+                        <input type="range" min="0" max="100" value="0" id="wear-slider" oninput="updateWear(this.value)">
+                        <span class="slider-val" id="wear-val">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2 class="panel-title">Telemetry Overview</h2>
+                <div class="metric-tile">
+                    <span class="metric-label">Simulated IOPS</span>
+                    <span class="metric-value highlight" id="m-iops">0</span>
+                </div>
+                <div class="metric-tile">
+                    <span class="metric-label">Data Throughput</span>
+                    <span class="metric-value highlight" id="m-throughput">0.00 GB/s</span>
+                </div>
+                <div class="metric-tile">
+                    <span class="metric-label">Active Host Threads</span>
+                    <span class="metric-value" id="m-threads">0</span>
+                </div>
+                <div class="metric-tile">
+                    <span class="metric-label">Average Read Latency</span>
+                    <span class="metric-value" style="color: var(--accent);" id="m-latency">8.0 ns</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Dashboard View -->
+        <section class="dashboard-main">
+            <!-- 3D M.2 SSD Render Graphic -->
+            <div class="ssd-container">
+                <div class="ssd-board">
+                    <div class="pcb-details"></div>
+                    <div class="gold-pins" id="p-pins"></div>
+                    
+                    <!-- Data flows -->
+                    <div class="data-lane lane-main-in" id="lane-in"></div>
+                    <div class="data-lane lane-to-mem1" id="lane-mem1"></div>
+                    <div class="data-lane lane-to-mem2" id="lane-mem2"></div>
+                    <div class="data-lane lane-to-mem3" id="lane-mem3"></div>
+
+                    <!-- Controller ASIC -->
+                    <div class="controller-chip" id="p-controller">
+                        <h3>FTJ</h3>
+                        <span>Controller ASIC</span>
+                        <span style="font-size: 0.55rem; color: var(--primary); font-family: monospace; margin-top: 5px;">28nm Mature Node</span>
+                    </div>
+
+                    <!-- Memory Dies -->
+                    <div class="memory-chips-container">
+                        <div class="mem-chip" id="chip-1">
+                            <span class="chip-label">FTJ Die 0</span>
+                            <div class="chip-temp-glow" id="glow-1"></div>
+                            <span class="chip-status-text" id="status-1">OK</span>
+                            <div class="chip-wear-bar"><div class="chip-wear-fill" id="wbar-1"></div></div>
+                        </div>
+                        <div class="mem-chip" id="chip-2">
+                            <span class="chip-label">FTJ Die 1</span>
+                            <div class="chip-temp-glow" id="glow-2"></div>
+                            <span class="chip-status-text" id="status-2">OK</span>
+                            <div class="chip-wear-bar"><div class="chip-wear-fill" id="wbar-2"></div></div>
+                        </div>
+                        <div class="mem-chip" id="chip-3">
+                            <span class="chip-label">FTJ Die 2</span>
+                            <div class="chip-temp-glow" id="glow-3"></div>
+                            <span class="chip-status-text" id="status-3">OK</span>
+                            <div class="chip-wear-bar"><div class="chip-wear-fill" id="wbar-3"></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lower Analytics Row -->
+            <div class="chart-grid">
+                <!-- Live line chart -->
+                <div class="panel">
+                    <div class="telemetry-header">
+                        <h2 class="panel-title" style="margin-bottom: 0;">Throughput History</h2>
+                        <span style="font-size: 0.8rem; color: var(--text-muted);">Real-Time GB/s Output</span>
+                    </div>
+                    <div class="chart-container">
+                        <svg class="svg-chart" id="svg-graph" viewBox="0 0 600 200" preserveAspectRatio="none">
+                            <defs>
+                                <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.3"/>
+                                    <stop offset="100%" stop-color="var(--primary)" stop-opacity="0.0"/>
+                                </linearGradient>
+                            </defs>
+                            <!-- Grid lines -->
+                            <line class="chart-grid-line" x1="0" y1="50" x2="600" y2="50" />
+                            <line class="chart-grid-line" x1="0" y1="100" x2="600" y2="100" />
+                            <line class="chart-grid-line" x1="0" y1="150" x2="600" y2="150" />
+                            <!-- Graphic paths -->
+                            <path class="chart-area" id="graph-area" d="M 0 200 L 0 200 Z" />
+                            <path class="chart-line" id="graph-line" d="M 0 200 L 0 200 Z" />
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Thermal / Queue stats panel -->
+                <div class="panel layout-row">
+                    <!-- Thermal circle -->
+                    <div>
+                        <h2 class="panel-title" style="font-size: 0.85rem; text-align: center;">Thermal State</h2>
+                        <div class="thermal-radial">
+                            <svg width="120" height="120" viewBox="0 0 120 120">
+                                <circle class="radial-bg" cx="60" cy="60" r="45" />
+                                <circle class="radial-progress" id="temp-progress" cx="60" cy="60" r="45" />
+                            </svg>
+                            <span class="radial-text" id="temp-val">28°C</span>
+                        </div>
+                        <div class="thermal-status" id="temp-status">STABLE</div>
+                    </div>
+
+                    <!-- Queue Depth stacks -->
+                    <div>
+                        <h2 class="panel-title" style="font-size: 0.85rem; text-align: center; margin-bottom: 0.8rem;">Queue (SQ)</h2>
+                        <div class="queue-stack" id="q-stack">
+                            <div class="queue-block"></div>
+                            <div class="queue-block"></div>
+                            <div class="queue-block"></div>
+                            <div class="queue-block"></div>
+                            <div class="queue-block"></div>
+                            <div class="queue-block"></div>
+                            <div class="queue-block"></div>
+                            <div class="queue-block"></div>
+                            <div class="queue-block"></div>
+                            <div class="queue-block"></div>
+                        </div>
+                        <div class="thermal-status" style="font-size: 0.8rem; margin-top: 0.5rem; color: var(--primary);" id="q-status">EMPTY</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ECC & Physical Wear Telemetry Panel -->
+            <div class="panel">
+                <h2 class="panel-title">SECDED ECC Error Correction & Degradation Telemetry</h2>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; text-align: center;">
+                    <div style="background: rgba(30, 41, 59, 0.3); border-radius: 8px; padding: 1rem;">
+                        <div style="color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">Total Bit-Flips Injected</div>
+                        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.8rem; font-weight: 700; color: var(--secondary); margin-top: 0.5rem;" id="e-flips">0</div>
+                    </div>
+                    <div style="background: rgba(30, 41, 59, 0.3); border-radius: 8px; padding: 1rem;">
+                        <div style="color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">Corrected Single-Bit Errors</div>
+                        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.8rem; font-weight: 700; color: var(--accent); margin-top: 0.5rem;" id="e-corrected">0</div>
+                    </div>
+                    <div style="background: rgba(30, 41, 59, 0.3); border-radius: 8px; padding: 1rem;">
+                        <div style="color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">Uncorrectable Errors (UECC)</div>
+                        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.8rem; font-weight: 700; color: #ef4444; margin-top: 0.5rem;" id="e-uncorrectable">0</div>
+                    </div>
+                    <div style="background: rgba(30, 41, 59, 0.3); border-radius: 8px; padding: 1rem;">
+                        <div style="color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">Active ECC Correcting Math</div>
+                        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1rem; font-weight: 700; color: var(--primary); margin-top: 1rem;">Hamming (72, 64) SECDED</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Simulation state
+        let state = {
+            workload: 'idle',
+            queueDepth: 1,
+            wearPct: 0,
+            iops: 0,
+            throughput: 0,
+            temperature: 28,
+            activeThreads: 0,
+            bitFlips: 0,
+            corrected: 0,
+            uncorrectable: 0,
+            maxWearPct: 0,
+            timeScale: 0
+        };
+
+        // Graph data points
+        let graphPoints = Array(20).fill(0);
+
+        // UI Selectors
+        const headerBadge = document.querySelector('.status-badge span');
+        const badgeIcon = document.querySelector('.status-dot');
+
+        function setWorkload(workloadType, btn) {
+            // Update active states
+            document.querySelectorAll('.workload-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            state.workload = workloadType;
+
+            // Trigger animations
+            const controller = document.getElementById('p-controller');
+            const pins = document.getElementById('p-pins');
+            const lanes = [
+                document.getElementById('lane-in'),
+                document.getElementById('lane-mem1'),
+                document.getElementById('lane-mem2'),
+                document.getElementById('lane-mem3')
+            ];
+
+            if (workloadType === 'idle') {
+                headerBadge.textContent = 'SIMULATOR STANDBY';
+                headerBadge.parentElement.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                headerBadge.parentElement.style.color = 'var(--accent)';
+                badgeIcon.style.background = 'var(--accent)';
+                
+                controller.classList.remove('active');
+                pins.classList.remove('active');
+                lanes.forEach(l => l.classList.remove('active'));
+            } else {
+                headerBadge.textContent = `RUNNING: ${workloadType.toUpperCase()} WORKLOAD`;
+                headerBadge.parentElement.style.borderColor = 'rgba(0, 240, 255, 0.3)';
+                headerBadge.parentElement.style.color = 'var(--primary)';
+                badgeIcon.style.background = 'var(--primary)';
+
+                controller.classList.add('active');
+                pins.classList.add('active');
+                lanes.forEach(l => l.classList.add('active'));
+            }
+        }
+
+        function updateQD(val) {
+            state.queueDepth = parseInt(val);
+            document.getElementById('qd-val').textContent = `QD-${val}`;
+        }
+
+        function updateWear(val) {
+            state.wearPct = parseInt(val);
+            document.getElementById('wear-val').textContent = `${val}%`;
+        }
+
+        // Loop calculating and updating variables to simulate the device
+        setInterval(() => {
+            let targetIops = 0;
+            let targetThroughput = 0;
+            let targetThreads = 0;
+            let targetTemp = 28;
+
+            if (state.workload !== 'idle') {
+                targetThreads = Math.min(8, Math.max(1, Math.round(state.queueDepth / 4)));
+            }
+
+            // Workload math
+            if (state.workload === 'sequential') {
+                // High throughput, medium IOPS
+                targetIops = 180000 + Math.round(Math.random() * 20000) + (state.queueDepth * 15000);
+                targetThroughput = (targetIops * 4096) / (1024 * 1024 * 1024); // GB/s
+                targetTemp = 45 + (state.queueDepth * 0.4);
+            } else if (state.workload === 'random') {
+                // High IOPS, lower throughput
+                targetIops = 2400000 + Math.round(Math.random() * 150000) + (state.queueDepth * 12000);
+                targetThroughput = (targetIops * 256) / (1024 * 1024 * 1024);
+                targetTemp = 36 + (state.queueDepth * 0.25);
+            } else if (state.workload === 'ai') {
+                // Vector DB load: high throughput read/write
+                targetIops = 3200000 + Math.round(Math.random() * 200000);
+                targetThroughput = 9.8 + (Math.random() * 1.5);
+                targetTemp = 55 + (state.queueDepth * 0.5);
+            } else if (state.workload === 'stress') {
+                // Brutal writes to wear out the drive
+                targetIops = 4800000 + Math.round(Math.random() * 300000);
+                targetThroughput = 16.5 + (Math.random() * 2.1);
+                targetTemp = 78 + (state.queueDepth * 0.8);
+            }
+
+            // Smooth interpolation
+            state.iops = Math.round(state.iops + (targetIops - state.iops) * 0.2);
+            state.throughput = state.throughput + (targetThroughput - state.throughput) * 0.2;
+            state.activeThreads = targetThreads;
+            
+            // Thermal throttling logic
+            if (state.temperature > 80) {
+                // Throttle performance to cool down
+                state.iops = Math.round(state.iops * 0.4);
+                state.throughput = state.throughput * 0.4;
+                targetTemp -= 15;
+            }
+            state.temperature = state.temperature + (targetTemp - state.temperature) * 0.1;
+
+            // Increment wear stats based on workload
+            if (state.workload !== 'idle') {
+                state.maxWearPct += (state.workload === 'stress') ? 0.35 : 0.05;
+                if (state.maxWearPct > 150) state.maxWearPct = 150;
+            }
+            // Add user slider override
+            let displayWear = Math.max(state.maxWearPct, state.wearPct);
+
+            // Bit flip simulation based on wear thresholds
+            if (displayWear > 100 && state.workload !== 'idle') {
+                let damageFactor = (displayWear - 100) / 50; // up to 1.0
+                let roll = Math.random();
+                if (roll < damageFactor * 0.25) {
+                    state.bitFlips += 1;
+                    if (Math.random() < 0.30) { // 30% chance of double bit flip (UECC)
+                        state.bitFlips += 1;
+                        state.uncorrectable += 1;
+                    } else {
+                        state.corrected += 1;
+                    }
+                }
+            }
+
+            // Update UI elements
+            document.getElementById('m-iops').textContent = state.workload === 'idle' ? '0' : state.iops.toLocaleString();
+            document.getElementById('m-throughput').textContent = state.workload === 'idle' ? '0.00 GB/s' : `${state.throughput.toFixed(2)} GB/s`;
+            document.getElementById('m-threads').textContent = state.activeThreads;
+            document.getElementById('m-latency').textContent = state.workload === 'idle' ? '8.0 ns' : `${(7.8 + Math.random() * 0.4).toFixed(2)} ns`;
+            
+            // Update chip wear & colors
+            updateChipsUI(displayWear);
+
+            // Update charts
+            updateGraph(state.throughput);
+            updateThermalRadial();
+            updateQueueStack();
+            updateECCUI();
+
+        }, 200);
+
+        function updateChipsUI(wear) {
+            const chips = ['chip-1', 'chip-2', 'chip-3'];
+            const wbars = ['wbar-1', 'wbar-2', 'wbar-3'];
+            const statuses = ['status-1', 'status-2', 'status-3'];
+            const glows = ['glow-1', 'glow-2', 'glow-3'];
+
+            chips.forEach((cId, idx) => {
+                const chip = document.getElementById(cId);
+                const wbar = document.getElementById(wbars[idx]);
+                const status = document.getElementById(statuses[idx]);
+                const glow = document.getElementById(glows[idx]);
+
+                // Set active class
+                if (state.workload !== 'idle') {
+                    chip.classList.add('active');
+                } else {
+                    chip.classList.remove('active');
+                }
+
+                // Update wear bar size
+                wbar.style.width = `${Math.min(100, wear)}%`;
+
+                // Temperature glow
+                let tempOpacity = Math.max(0, (state.temperature - 35) / 55); // max 1.0 at 90C
+                glow.style.opacity = tempOpacity;
+
+                // Adjust status text and colors
+                if (wear > 100) {
+                    wbar.style.backgroundColor = '#ef4444'; // Red
+                    status.textContent = 'BAD';
+                    status.style.color = '#ef4444';
+                } else if (wear > 70) {
+                    wbar.style.backgroundColor = '#f59e0b'; // Amber
+                    status.textContent = 'WARN';
+                    status.style.color = '#f59e0b';
+                } else {
+                    wbar.style.backgroundColor = 'var(--accent)'; // Green
+                    status.textContent = 'OK';
+                    status.style.color = 'var(--accent)';
+                }
+            });
+        }
+
+        function updateGraph(currentVal) {
+            graphPoints.push(state.workload === 'idle' ? 0 : currentVal);
+            graphPoints.shift();
+
+            const maxVal = 20; // 20 GB/s max chart height
+            let lineD = "M 0 " + (200 - (graphPoints[0] / maxVal) * 160);
+            
+            for (let i = 1; i < graphPoints.length; ++i) {
+                let x = i * (600 / (graphPoints.length - 1));
+                let y = 200 - (graphPoints[i] / maxVal) * 160;
+                lineD += ` L ${x} ${y}`;
+            }
+
+            let areaD = lineD + " L 600 200 L 0 200 Z";
+
+            document.getElementById('graph-line').setAttribute('d', lineD);
+            document.getElementById('graph-area').setAttribute('d', areaD);
+        }
+
+        function updateThermalRadial() {
+            const circle = document.getElementById('temp-progress');
+            const label = document.getElementById('temp-val');
+            const status = document.getElementById('temp-status');
+
+            // Circumference of radial circle = 2 * PI * r = 2 * 3.1415 * 45 = 282.7
+            const maxTemp = 100;
+            const offset = 283 - (state.temperature / maxTemp) * 283;
+            circle.style.strokeDashoffset = offset;
+            label.textContent = `${Math.round(state.temperature)}°C`;
+
+            // Adjust color & warnings based on temp
+            if (state.temperature > 75) {
+                circle.style.stroke = 'var(--secondary)';
+                label.style.color = 'var(--secondary)';
+                status.textContent = 'THERMAL OVERHEAT';
+                status.classList.add('warning-active');
+            } else if (state.temperature > 50) {
+                circle.style.stroke = '#f59e0b';
+                label.style.color = '#f59e0b';
+                status.textContent = 'ELEVATED';
+                status.classList.remove('warning-active');
+                status.style.color = '#f59e0b';
+            } else {
+                circle.style.stroke = 'var(--primary)';
+                label.style.color = 'var(--text-main)';
+                status.textContent = 'STABLE';
+                status.classList.remove('warning-active');
+                status.style.color = 'var(--accent)';
+            }
+        }
+
+        function updateQueueStack() {
+            const blocks = document.querySelectorAll('.queue-block');
+            const qStatus = document.getElementById('q-status');
+            
+            // Map queueDepth (1-64) to 10 blocks
+            let activeBlocksCount = Math.ceil((state.queueDepth / 64) * 10);
+            if (state.workload === 'idle') activeBlocksCount = 0;
+
+            blocks.forEach((block, idx) => {
+                if (idx < activeBlocksCount) {
+                    block.classList.add('active');
+                } else {
+                    block.classList.remove('active');
+                }
+            });
+
+            if (activeBlocksCount === 0) {
+                qStatus.textContent = 'EMPTY';
+                qStatus.style.color = varToColor('--text-muted');
+            } else if (activeBlocksCount > 8) {
+                qStatus.textContent = 'SATURATED';
+                qStatus.style.color = '#ef4444';
+            } else {
+                qStatus.textContent = `QD-${state.queueDepth}`;
+                qStatus.style.color = varToColor('--primary');
+            }
+        }
+
+        function updateECCUI() {
+            document.getElementById('e-flips').textContent = state.bitFlips;
+            document.getElementById('e-corrected').textContent = state.corrected;
+            document.getElementById('e-uncorrectable').textContent = state.uncorrectable;
+        }
+
+        function varToColor(varName) {
+            return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+        }
+
+    </script>
+</body>
+</html>

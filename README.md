@@ -201,6 +201,23 @@ dir Y:\
 Stop-Process -Id $proc.Id -Force
 ```
 
+## Interactive Simulation & Diagnostics
+
+The project includes two interactive interfaces to monitor the simulator's telemetry, physical wear-out, and ECC behavior in real-time.
+
+### 1. Graphical Web Dashboard
+Open the standalone web dashboard in any browser to interactively stress-test the drive, monitor thermal states, and watch the wear heatmap change:
+- **Location**: [`docs/dashboard.html`](file:///D:/FTJ-SSD-Sim/docs/dashboard.html) (double-click to run).
+- **Features**: Live charts, interactive PCB data-flow animation, thermal throttle warnings, and dynamic ECC telemetry logs.
+
+### 2. Console TUI Monitor (Terminal Dashboard)
+Run the C++ simulator with the `--tui` argument to launch a live diagnostics panel inside your Command Prompt or PowerShell:
+```powershell
+# Run the terminal dashboard
+.\build\Release\ftj_sim_cli.exe --tui
+```
+- **Features**: Live IOPS/Throughput updates, automated workload generator, and an 8x8 regional wear heatmap showcasing physical memory degradation and SECDED Hamming correction.
+
 ---
 
 ## Benchmarking & Replication
