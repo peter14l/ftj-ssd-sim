@@ -53,14 +53,14 @@ public:
 
     // Retrieve stats
     size_t GetCapacity() const noexcept { return capacity_; }
-    uint64_t GetTotalReads() const noexcept { return total_reads_; }
-    uint64_t GetTotalWrites() const noexcept { return total_writes_; }
+    uint64_t GetTotalReads() const noexcept { return total_reads_.load(std::memory_order_relaxed); }
+    uint64_t GetTotalWrites() const noexcept { return total_writes_.load(std::memory_order_relaxed); }
     uint64_t GetLatencyNs() const noexcept { return latency_ns_; }
 
     // ECC & Wear Telemetry API
-    uint64_t GetCorrectedErrors() const noexcept { return corrected_errors_; }
-    uint64_t GetUncorrectableErrors() const noexcept { return uncorrectable_errors_; }
-    uint64_t GetTotalBitFlips() const noexcept { return total_bit_flips_; }
+    uint64_t GetCorrectedErrors() const noexcept { return corrected_errors_.load(std::memory_order_relaxed); }
+    uint64_t GetUncorrectableErrors() const noexcept { return uncorrectable_errors_.load(std::memory_order_relaxed); }
+    uint64_t GetTotalBitFlips() const noexcept { return total_bit_flips_.load(std::memory_order_relaxed); }
     double GetMaxWearPercentage() const noexcept;
     void InjectHeavyWear(uint64_t offset, uint32_t write_count) noexcept;
 
@@ -75,12 +75,12 @@ private:
     uint64_t latency_ns_;
     std::unique_ptr<uint8_t[]> memory_buffer_;
     std::unique_ptr<uint8_t[]> ecc_buffer_;          // Stores 1 byte of ECC per 8-byte chunk
-    std::vector<uint32_t> page_writes_;              // Tracks write counts per 4KB page
+    std::vector<std::atomic<uint32_t>> page_writes_; // Tracks write counts per 4KB page (atomic)
     LatencyInjector injector_;
 
     // Performance & ECC counters
-    mutable uint64_t total_reads_ = 0;
-    uint64_t total_writes_ = 0;
+    mutable std::atomic<uint64_t> total_reads_{0};
+    std::atomic<uint64_t> total_writes_{0};
     mutable std::atomic<uint64_t> corrected_errors_{0};
     mutable std::atomic<uint64_t> uncorrectable_errors_{0};
     mutable std::atomic<uint64_t> total_bit_flips_{0};

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstring>
 #include <stdexcept>
+#include <atomic>
 
 namespace ftj {
 
@@ -96,7 +97,8 @@ FTJController::FTJController(size_t capacity_bytes, uint64_t latency_ns)
 
     // Initialize page writes (per 4KB page)
     size_t num_pages = (capacity_bytes + 4095) / 4096;
-    page_writes_.resize(num_pages, 0);
+    page_writes_.resize(num_pages);
+    for (size_t i = 0; i < num_pages; ++i) page_writes_[i].store(0, std::memory_order_relaxed);
 }
 
 FTJController::~FTJController() = default;
@@ -181,7 +183,8 @@ int FTJController::DecodeAndCorrect(uint64_t& data, uint8_t stored_ecc) noexcept
 double FTJController::GetMaxWearPercentage() const noexcept {
     if (page_writes_.empty()) return 0.0;
     uint32_t max_w = 0;
-    for (uint32_t w : page_writes_) {
+    for (size_t i = 0; i < page_writes_.size(); ++i) {
+        uint32_t w = page_writes_[i].load(std::memory_order_relaxed);
         if (w > max_w) max_w = w;
     }
     return (static_cast<double>(max_w) / WEAR_THRESHOLD) * 100.0;
@@ -190,7 +193,7 @@ double FTJController::GetMaxWearPercentage() const noexcept {
 void FTJController::InjectHeavyWear(uint64_t offset, uint32_t write_count) noexcept {
     uint64_t page = offset / 4096;
     if (page < page_writes_.size()) {
-        page_writes_[page] = write_count;
+        page_writes_[page].store(write_count, std::memory_order_relaxed);
     }
 }
 
@@ -218,7 +221,7 @@ bool FTJController::Read(uint64_t offset, void* dest, size_t size) const noexcep
 
         // Simulate bit degradation based on page wear
         uint64_t page = chunk_offset / 4096;
-        uint32_t writes = (page < page_writes_.size()) ? page_writes_[page] : 0;
+        uint32_t writes = (page < page_writes_.size()) ? page_writes_[page].load(std::memory_order_relaxed) : 0;
 
         if (writes > WEAR_THRESHOLD) {
             double prob = static_cast<double>(writes - WEAR_THRESHOLD) / WEAR_THRESHOLD * 0.05; // up to 5%
@@ -229,7 +232,7 @@ bool FTJController::Read(uint64_t offset, void* dest, size_t size) const noexcep
                 // Flip 1 bit
                 int bit1 = SimpleRand(g_seed) % 64;
                 data_word ^= (1ULL << bit1);
-                total_bit_flips_++;
+                total_bit_flips_.fetch_add(1, std::memory_order_relaxed);
 
                 // 20% chance of double bit flip (uncorrectable)
                 double rand_val2 = static_cast<double>(SimpleRand(g_seed) % 10000) / 10000.0;
@@ -239,7 +242,7 @@ bool FTJController::Read(uint64_t offset, void* dest, size_t size) const noexcep
                         bit2 = SimpleRand(g_seed) % 64;
                     }
                     data_word ^= (1ULL << bit2);
-                    total_bit_flips_++;
+                    total_bit_flips_.fetch_add(1, std::memory_order_relaxed);
                 }
             }
         }
@@ -247,9 +250,9 @@ bool FTJController::Read(uint64_t offset, void* dest, size_t size) const noexcep
         // Validate and correct
         int err = DecodeAndCorrect(data_word, stored_ecc);
         if (err == 1) {
-            corrected_errors_++;
+            corrected_errors_.fetch_add(1, std::memory_order_relaxed);
         } else if (err == 2) {
-            uncorrectable_errors_++;
+            uncorrectable_errors_.fetch_add(1, std::memory_order_relaxed);
             success = false;
         }
 
@@ -263,7 +266,7 @@ bool FTJController::Read(uint64_t offset, void* dest, size_t size) const noexcep
         }
     }
 
-    total_reads_++;
+    total_reads_.fetch_add(1, std::memory_order_relaxed);
     return success;
 }
 
@@ -306,11 +309,11 @@ bool FTJController::Write(uint64_t offset, const void* src, size_t size) noexcep
         // Update page write count
         uint64_t page = chunk_offset / 4096;
         if (page < page_writes_.size()) {
-            page_writes_[page]++;
+            page_writes_[page].fetch_add(1, std::memory_order_relaxed);
         }
     }
 
-    total_writes_++;
+    total_writes_.fetch_add(1, std::memory_order_relaxed);
     return true;
 }
 
