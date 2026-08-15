@@ -12,6 +12,7 @@
 #include <future>
 #include <atomic>
 #include <algorithm>
+#include <cstdlib>
 
 #ifdef _WIN32
 #define NOMINMAX
