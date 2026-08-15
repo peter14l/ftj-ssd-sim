@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Configure header include directories
 include_directories(include)
 # WinFsp SDK paths are Windows-specific; only add on Windows
-if (WIN32)
+if (WIN32 AND BUILD_VDISK_SRV)
     include_directories("C:/Program Files (x86)/WinFsp/inc")
 endif()
 
@@ -52,8 +52,10 @@ else()
     target_compile_options(ftj_waf_harness PRIVATE -Wall -Wextra -Werror)
 endif()
 
+option(BUILD_VDISK_SRV "Build WinFsp Virtual Disk Server" ON)
+
 # Define the Virtual Disk Server executable (Windows-only)
-if (WIN32)
+if (WIN32 AND BUILD_VDISK_SRV)
     add_executable(ftj_vdisk_srv
         src/win_vdisk.cpp
         src/win_vdisk_srv.c
