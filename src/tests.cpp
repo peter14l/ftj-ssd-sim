@@ -12,16 +12,19 @@ void TestECC() {
     uint64_t copy = data;
     int res = FTJController::DecodeAndCorrect(copy, ecc);
     assert(res == 0);
+    (void)res;
 
     // flip one bit -> should be corrected
     uint64_t flipped = data ^ (1ULL << 5);
     res = FTJController::DecodeAndCorrect(flipped, ecc);
     assert(res == 1);
+    (void)res;
 
     // flip two bits -> uncorrectable (most likely)
     uint64_t dbl = data ^ (1ULL << 5) ^ (1ULL << 10);
     res = FTJController::DecodeAndCorrect(dbl, ecc);
     assert(res == 2);
+    (void)res;
 }
 
 void TestRingBufferAndQueue() {
