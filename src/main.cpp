@@ -82,10 +82,15 @@ struct Simulated3DNand {
 
 // Helper for high-precision time measurement
 inline uint64_t GetTimeNs() {
+#ifdef _WIN32
     LARGE_INTEGER freq, count;
     QueryPerformanceFrequency(&freq);
     QueryPerformanceCounter(&count);
     return static_cast<uint64_t>((count.QuadPart * 1'000'000'000) / freq.QuadPart);
+#else
+    auto now = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+#endif
 }
 
 // Function to print results to console and append to markdown file
@@ -269,15 +274,15 @@ int main(int argc, char* argv[]) {
             print_line("  ECC & DEGRADATION METRICS:");
             
             char flips_str[64];
-            std::snprintf(flips_str, sizeof(flips_str), "    * Total Bit Flips Injected : %llu", tui_controller.GetTotalBitFlips());
+            std::snprintf(flips_str, sizeof(flips_str), "    * Total Bit Flips Injected : %llu", static_cast<unsigned long long>(tui_controller.GetTotalBitFlips()));
             print_line(flips_str);
             
             char corrected_str[64];
-            std::snprintf(corrected_str, sizeof(corrected_str), "    * Single-Bit Corrected     : %llu", tui_controller.GetCorrectedErrors());
+            std::snprintf(corrected_str, sizeof(corrected_str), "    * Single-Bit Corrected     : %llu", static_cast<unsigned long long>(tui_controller.GetCorrectedErrors()));
             print_line(corrected_str);
             
             char uncorrectable_str[64];
-            std::snprintf(uncorrectable_str, sizeof(uncorrectable_str), "    * Double-Bit Uncorrectable : %llu", tui_controller.GetUncorrectableErrors());
+            std::snprintf(uncorrectable_str, sizeof(uncorrectable_str), "    * Double-Bit Uncorrectable : %llu", static_cast<unsigned long long>(tui_controller.GetUncorrectableErrors()));
             print_line(uncorrectable_str);
             
             char wear_str[64];
