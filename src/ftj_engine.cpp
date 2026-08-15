@@ -471,6 +471,7 @@ int32_t FTJController::AllocatePhysicalPage(bool prefer_hot) noexcept {
 void FTJController::RunGC(size_t target_free) noexcept {
     // Hot/cold-aware GC: prefer blocks with low hotness and low valid count
     while ((free_physical_pages_hot_.size() + free_physical_pages_cold_.size()) < target_free) {
+        size_t initial_free = free_physical_pages_hot_.size() + free_physical_pages_cold_.size();
         int candidate = -1;
         int best_metric = INT_MAX;
 
@@ -550,11 +551,14 @@ void FTJController::RunGC(size_t target_free) noexcept {
 
         block_valid_count_[candidate] = 0;
 
-        // If GC couldn't free pages (no candidate), break
-        if ((free_physical_pages_hot_.size() + free_physical_pages_cold_.size()) >= target_free) break;
-        // else continue to next iteration
+        size_t current_free = free_physical_pages_hot_.size() + free_physical_pages_cold_.size();
+        if (current_free <= initial_free) {
+            // No progress made in this GC cycle, break to avoid infinite loop
+            break;
+        }
+
+        if (current_free >= target_free) break;
     }
 }
-
 } // namespace ftj
 

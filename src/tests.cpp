@@ -37,18 +37,31 @@ void TestRingBufferAndQueue() {
         }
     });
 
-    // consumer thread
+    // consumer/worker thread: pops from SQ, process, pushes to CQ
     std::thread c([&]() {
-        uint32_t seen = 0;
-        while (seen < 100) {
-            CQEntry rx;
-            if (qp.Reap(rx)) {
-                ++seen;
+        uint32_t processed = 0;
+        while (processed < 100) {
+            SQEntry req;
+            if (qp.PopRequest(req)) {
+                CQEntry rsp{req.cid, 0};
+                while (!qp.CompleteRequest(rsp)) std::this_thread::yield();
+                ++processed;
             } else {
                 std::this_thread::yield();
             }
         }
     });
+
+    // reaper: reaps from CQ
+    uint32_t reaped = 0;
+    while (reaped < 100) {
+        CQEntry rx;
+        if (qp.Reap(rx)) {
+            ++reaped;
+        } else {
+            std::this_thread::yield();
+        }
+    }
 
     p.join();
     c.join();
@@ -89,13 +102,21 @@ void TestControllerConcurrentRW() {
 
 int main() {
     try {
+        std::cout << "Starting TestECC()...\n" << std::flush;
         TestECC();
+        std::cout << "TestECC() passed.\n" << std::flush;
+
+        std::cout << "Starting TestRingBufferAndQueue()...\n" << std::flush;
         TestRingBufferAndQueue();
+        std::cout << "TestRingBufferAndQueue() passed.\n" << std::flush;
+
+        std::cout << "Starting TestControllerConcurrentRW()...\n" << std::flush;
         TestControllerConcurrentRW();
+        std::cout << "TestControllerConcurrentRW() passed.\n" << std::flush;
     } catch (...) {
         std::cerr << "Test threw exception\n";
         return 2;
     }
-    std::cout << "All tests passed\n";
+    std::cout << "All tests passed\n" << std::flush;
     return 0;
 }
