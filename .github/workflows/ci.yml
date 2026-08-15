@@ -28,13 +28,17 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
+    - name: Set up MSVC Developer Command Prompt
+      if: matrix.os == 'windows-latest'
+      uses: ilammy/msvc-dev-cmd@v1
+
     - name: Configure CMake (Windows)
       if: matrix.os == 'windows-latest'
       run: |
         # Download and install WinFsp in Windows runner so ftj_vdisk_srv can compile
         curl -L -o winfsp.msi https://github.com/winfsp/winfsp/releases/download/v2.0/winfsp-2.0.23075.msi
-        msiexec /i winfsp.msi /quiet /qn /norestart
-        cmake -G "Visual Studio 17 2022" -A x64 -B build -DCMAKE_BUILD_TYPE=Release
+        Start-Process msiexec.exe -ArgumentList '/i', 'winfsp.msi', '/quiet', '/qn', '/norestart' -NoNewWindow -Wait
+        cmake -G "NMake Makefiles" -B build -DCMAKE_BUILD_TYPE=Release
 
     - name: Build C++ Simulator
       run: cmake --build build --config Release
@@ -45,7 +49,12 @@ jobs:
 
     - name: Run C++ Unit Tests (Windows)
       if: matrix.os == 'windows-latest'
-      run: .\build\Release\ftj_tests.exe
+      run: |
+        if (Test-Path .\build\Release\ftj_tests.exe) {
+          .\build\Release\ftj_tests.exe
+        } else {
+          .\build\ftj_tests.exe
+        }
 
   hdl-verification:
     name: Verilog Syntax & Testbench Simulation
@@ -62,5 +71,5 @@ jobs:
 
     - name: Compile and Simulate Top Controller
       run: |
-        iverilog -o ftj_sim hdl/ftj_top_controller.v hdl/tb_ftj_top_controller.v
+        iverilog -o ftj_sim hdl/ftj_submission_queue.v hdl/ftj_top_controller.v hdl/tb_ftj_top_controller.v
         vvp ftj_sim

@@ -13,9 +13,11 @@
 #include <atomic>
 #include <algorithm>
 
+#ifdef _WIN32
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#endif
 
 // Structures for Benchmark results
 struct BenchmarkResult {
