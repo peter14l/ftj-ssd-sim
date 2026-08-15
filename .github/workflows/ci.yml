@@ -1,0 +1,66 @@
+name: FTJ Memory Engine CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build and Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up CMake
+      uses: jwlawson/actions-setup-cmake@v2
+      with:
+        cmake-version: '3.25.x'
+
+    - name: Configure CMake (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Configure CMake (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        # Download and install WinFsp in Windows runner so ftj_vdisk_srv can compile
+        curl -L -o winfsp.msi https://github.com/winfsp/winfsp/releases/download/v2.0/winfsp-2.0.23075.msi
+        msiexec /i winfsp.msi /quiet /qn /norestart
+        cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build C++ Simulator
+      run: cmake --build build --config Release
+
+    - name: Run C++ Unit Tests (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: ./build/ftj_tests
+
+    - name: Run C++ Unit Tests (Windows)
+      if: matrix.os == 'windows-latest'
+      run: .\build\Release\ftj_tests.exe
+
+  hdl-verification:
+    name: Verilog Syntax & Testbench Simulation
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install Icarus Verilog
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y iverilog
+
+    - name: Compile and Simulate Top Controller
+      run: |
+        iverilog -o ftj_sim hdl/ftj_top_controller.v hdl/tb_ftj_top_controller.v
+        vvp ftj_sim

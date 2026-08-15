@@ -52,12 +52,12 @@ else()
     target_compile_options(ftj_waf_harness PRIVATE -Wall -Wextra -Werror)
 endif()
 
-# Define the Virtual Disk Server executable
-add_executable(ftj_vdisk_srv
-    src/win_vdisk.cpp
-    src/win_vdisk_srv.c
-)
+# Define the Virtual Disk Server executable (Windows-only)
 if (WIN32)
+    add_executable(ftj_vdisk_srv
+        src/win_vdisk.cpp
+        src/win_vdisk_srv.c
+    )
     target_link_libraries(ftj_vdisk_srv PRIVATE ftj_engine "C:/Program Files (x86)/WinFsp/lib/winfsp-x64.lib")
 
     if(MSVC)
