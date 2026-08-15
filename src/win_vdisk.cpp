@@ -58,12 +58,12 @@ FSP_FSCTL_STATIC_ASSERT(MEMFS_MAX_PATH > MAX_PATH,
 /*
  * Define the MEMFS_REPARSE_POINTS macro to include reparse points support.
  */
-#define MEMFS_REPARSE_POINTS
+//#define MEMFS_REPARSE_POINTS
 
 /*
  * Define the MEMFS_NAMED_STREAMS macro to include named streams support.
  */
-#define MEMFS_NAMED_STREAMS
+//#define MEMFS_NAMED_STREAMS
 
 /*
  * Define the MEMFS_DIRINFO_BY_NAME macro to include GetDirInfoByName.
@@ -73,7 +73,7 @@ FSP_FSCTL_STATIC_ASSERT(MEMFS_MAX_PATH > MAX_PATH,
 /*
  * Define the MEMFS_SLOWIO macro to include delayed I/O response support.
  */
-#define MEMFS_SLOWIO
+//#define MEMFS_SLOWIO
 
 /*
  * Define the MEMFS_CONTROL macro to include DeviceControl support.
@@ -83,12 +83,12 @@ FSP_FSCTL_STATIC_ASSERT(MEMFS_MAX_PATH > MAX_PATH,
 /*
  * Define the MEMFS_EA macro to include extended attributes support.
  */
-#define MEMFS_EA
+//#define MEMFS_EA
 
 /*
  * Define the MEMFS_WSL macro to include WSLinux support.
  */
-#define MEMFS_WSL
+//#define MEMFS_WSL
 
 /*
  * Define the MEMFS_REJECT_EARLY_IRP macro to reject IRP's sent
@@ -2389,6 +2389,8 @@ static FSP_FILE_SYSTEM_INTERFACE MemfsInterface =
     0,
 #if defined(MEMFS_EA) || defined(MEMFS_WSL)
     Create,
+#else
+    0,
 #endif
 #if defined(MEMFS_EA)
     Overwrite,

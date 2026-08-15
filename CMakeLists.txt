@@ -43,6 +43,15 @@ else()
     target_compile_options(ftj_tests PRIVATE -Wall -Wextra -Werror)
 endif()
 
+# WAF/Endurance harness
+add_executable(ftj_waf_harness src/waf_harness.cpp)
+target_link_libraries(ftj_waf_harness PRIVATE ftj_engine)
+if(MSVC)
+    target_compile_options(ftj_waf_harness PRIVATE /W4 /WX /permissive- /utf-8)
+else()
+    target_compile_options(ftj_waf_harness PRIVATE -Wall -Wextra -Werror)
+endif()
+
 # Define the Virtual Disk Server executable
 add_executable(ftj_vdisk_srv
     src/win_vdisk.cpp

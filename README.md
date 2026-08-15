@@ -6,7 +6,22 @@
 [![CMake](https://img.shields.io/badge/Build-CMake%203.15%2B-red?style=flat-square&logo=cmake)](https://cmake.org)
 [![License](https://img.shields.io/badge/License-Proprietary%20%2F%20Confidential-critical?style=flat-square)](#license--ip-notice)
 
+
 > **Low-latency, user-space virtual disk controller designed for next-generation Ferroelectric Tunnel Junction (FTJ) memory simulation and CXL/NVMe tiering.**
+
+---
+
+## 🎯 Executive Vision: The Next-Gen AI SSD Solution
+
+This project is a hardware-software simulation framework for a **next-generation Solid State Drive (SSD)** designed to solve the two most critical bottlenecks in modern Artificial Intelligence (AI) and enterprise storage:
+
+### 1. The AI Storage Wear-Out Crisis (Durability)
+*   **The Problem:** Standard modern SSDs use 3D NAND Flash memory. Under heavy AI workloads (such as LLM KV-caching and vector database queries), standard SSDs wear out and die in a matter of months. This is because NAND cells physically degrade and fail after about 3,000 write cycles.
+*   **Our Solution:** This controller simulates **Ferroelectric Tunnel Junction (FTJ)** memory. FTJ cells store data using electrical polarization fields in thin-film Hafnium Oxide ($\text{HfO}_2$) instead of physically trapping electrons. This achieves **near-infinite write endurance ($>10^{10}$ write cycles)**, ensuring the SSD lasts for years under constant write pressure.
+
+### 2. The AI Hardware Inflation Crisis (Pricing)
+*   **The Problem:** High-performance storage and DRAM are extremely expensive and backordered due to the global monopoly on cutting-edge sub-7nm manufacturing foundries.
+*   **Our Solution:** Instead of targeting expensive sub-7nm nodes, our SSD controller architecture is designed for mature **28nm planar foundries**. Hafnium Oxide is standard in BEOL silicon processing, allowing standard mature foundries to print our memory chip layout with **zero retooling**, reducing initial startup manufacturing costs (mask sets) by over **20x** (from \$50M+ to \$2M).
 
 ---
 

@@ -41,3 +41,7 @@ ehthumbs.db
 
 # Logs & local test output
 *.log
+
+# Tool-specific artifacts
+graphify-out/
+

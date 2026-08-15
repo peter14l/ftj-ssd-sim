@@ -37,7 +37,6 @@ void TestRingBufferAndQueue() {
     // consumer thread
     std::thread c([&]() {
         uint32_t seen = 0;
-        CQEntry ce;
         while (seen < 100) {
             CQEntry rx;
             if (qp.Reap(rx)) {

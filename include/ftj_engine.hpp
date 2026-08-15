@@ -6,6 +6,8 @@
 #include <memory>
 #include <string>
 #include <atomic>
+#include <mutex>
+#include <algorithm>
 
 #ifdef _MSC_VER
 #pragma warning(disable: 4324)
@@ -64,6 +66,9 @@ public:
     double GetMaxWearPercentage() const noexcept;
     void InjectHeavyWear(uint64_t offset, uint32_t write_count) noexcept;
 
+    // Physical write accounting (bytes) — useful for WAF metrics
+    uint64_t GetTotalPhysicalBytesWritten() const noexcept;
+
     // Static ECC Helpers
     static uint8_t CalculateECC(uint64_t data) noexcept;
     static int DecodeAndCorrect(uint64_t& data, uint8_t stored_ecc) noexcept;
@@ -75,7 +80,42 @@ private:
     uint64_t latency_ns_;
     std::unique_ptr<uint8_t[]> memory_buffer_;
     std::unique_ptr<uint8_t[]> ecc_buffer_;          // Stores 1 byte of ECC per 8-byte chunk
-    std::vector<std::atomic<uint32_t>> page_writes_; // Tracks write counts per 4KB page (atomic)
+    // Tracks write counts per 4KB page (atomic array allocated on heap to avoid vector move requirements)
+    std::unique_ptr<std::atomic<uint32_t>[]> page_writes_;
+    size_t page_count_ = 0;
+
+    // Simple log-structured FTL simulation (page-granular)
+    static constexpr size_t PAGE_SIZE = 4096;
+    static constexpr size_t PAGES_PER_BLOCK = 256; // 1MB block
+    size_t num_blocks_ = 0;
+
+    // Logical-to-physical mapping (one entry per logical page)
+    std::vector<int32_t> l2p_map_; // -1 = unmapped
+
+    // Physical page metadata
+    std::vector<char> phys_valid_; // 1 = valid/mapped, 0 = free/invalid
+    std::vector<int32_t> phys_owner_lba_; // which logical page maps here, -1 if none
+    std::vector<int32_t> phys_block_; // block id for each physical page
+    std::vector<int32_t> block_valid_count_; // number of valid pages per block
+
+    // Free lists of physical pages (hot/cold separation)
+    std::vector<int32_t> free_physical_pages_hot_;
+    std::vector<int32_t> free_physical_pages_cold_;
+
+    // Simple mapping lock for simulation correctness (coarse-grained)
+    mutable std::mutex mapping_mutex_;
+
+    // LBA hot counters for hot/cold classification
+    std::vector<uint32_t> lba_hot_counters_;
+    static constexpr uint32_t HOT_THRESHOLD = 4; // writes to consider an LBA 'hot'
+
+    // GC threshold: when free pages fall below this absolute count, trigger GC
+    size_t gc_low_watermark_ = 0; // set at init
+    size_t gc_target_free_ = 0;
+
+    // Helper GC/allocation routines
+    int32_t AllocatePhysicalPage(bool prefer_hot = false) noexcept;
+    void RunGC(size_t target_free) noexcept;
     LatencyInjector injector_;
 
     // Performance & ECC counters
@@ -84,6 +124,9 @@ private:
     mutable std::atomic<uint64_t> corrected_errors_{0};
     mutable std::atomic<uint64_t> uncorrectable_errors_{0};
     mutable std::atomic<uint64_t> total_bit_flips_{0};
+
+    // Physical write accounting (bytes)
+    mutable std::atomic<uint64_t> total_physical_bytes_written_{0};
 };
 
 // --- NVMe Queue structures ---
