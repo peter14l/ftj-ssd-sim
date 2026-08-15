@@ -1,11 +1,18 @@
 #include "ftj_engine.hpp"
 
+#ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <intrin.h>
+#else
+#include <x86intrin.h>
+#include <immintrin.h>
+#include <chrono>
+#endif
+
 #include <algorithm>
 #include <cstring>
 #include <stdexcept>
@@ -26,6 +33,7 @@ LatencyInjector::LatencyInjector(uint64_t latency_ns) : latency_ns_(latency_ns) 
 void LatencyInjector::Calibrate() noexcept {
     if (calibrated_) return;
 
+#ifdef _WIN32
     LARGE_INTEGER freq;
     if (!QueryPerformanceFrequency(&freq)) {
         // Fallback: 3.0 GHz CPU
@@ -49,6 +57,22 @@ void LatencyInjector::Calibrate() noexcept {
     uint64_t end_tsc = __rdtsc();
     double total_ns = elapsed_ms * 1'000'000.0;
     cycles_per_ns_ = static_cast<double>(end_tsc - start_tsc) / total_ns;
+#else
+    auto start_time = std::chrono::high_resolution_clock::now();
+    uint64_t start_tsc = __rdtsc();
+
+    double elapsed_ms = 0.0;
+    const double target_ms = 10.0; // Calibrate over 10 milliseconds
+
+    while (elapsed_ms < target_ms) {
+        auto current_time = std::chrono::high_resolution_clock::now();
+        elapsed_ms = std::chrono::duration<double, std::milli>(current_time - start_time).count();
+    }
+
+    uint64_t end_tsc = __rdtsc();
+    double total_ns = elapsed_ms * 1'000'000.0;
+    cycles_per_ns_ = static_cast<double>(end_tsc - start_tsc) / total_ns;
+#endif
 
     // Ensure we have a sane value
     if (cycles_per_ns_ <= 0.1) {
@@ -65,7 +89,7 @@ void LatencyInjector::Inject() const noexcept {
     uint64_t target_cycles = static_cast<uint64_t>(latency_ns_ * cycles_per_ns_);
     
     while ((__rdtsc() - start) < target_cycles) {
-        #if defined(_M_IX86) || defined(_M_X64)
+        #if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
         _mm_pause();
         #endif
     }

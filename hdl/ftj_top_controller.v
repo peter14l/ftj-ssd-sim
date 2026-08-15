@@ -101,6 +101,7 @@ module ftj_top_controller #(
 
     // FTL mapping state signals
     wire [ADDR_WIDTH-1:0] phys_addr = ftl_l2p_map[sq_addr[7:0]];
+    integer i;
 
     // ==========================================================
     // 4. Controller Main State Machine (FSM)
@@ -136,12 +137,12 @@ module ftj_top_controller #(
             ecc_dec_in_parity <= 0;
             
             // Initialize direct map L2P table (Default: Identity Map)
-            for (int i = 0; i < 256; i = i + 1) begin
+            for (i = 0; i < 256; i = i + 1) begin
                 ftl_l2p_map[i] <= i;
             end
             
             // Initialize wear table
-            for (int i = 0; i < BLOCKS; i = i + 1) begin
+            for (i = 0; i < BLOCKS; i = i + 1) begin
                 ftl_wear_table[i] <= 0;
             end
         end else begin
