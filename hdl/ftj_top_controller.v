@@ -104,16 +104,26 @@ module ftj_top_controller #(
     integer i;
 
     // ==========================================================
+    // 3b. Hardware Half-Select Disturb & Autonomous Refresh Engine (HAR-SM)
+    // ==========================================================
+    parameter DISTURB_LIMIT = 16'd500; // Refresh threshold for disturbed adjacent cells
+    reg [15:0] ftl_disturb_table [0:BLOCKS-1]; // Half-select stress counters per block
+    reg [ADDR_WIDTH-1:0] refresh_block_ptr;
+    reg                  refresh_pending;
+
+    // ==========================================================
     // 4. Controller Main State Machine (FSM)
     // ==========================================================
-    localparam STATE_IDLE       = 3'd0;
-    localparam STATE_FETCH      = 3'd1;
-    localparam STATE_TRANSLATE  = 3'd2;
-    localparam STATE_ECC_GEN    = 3'd3;
-    localparam STATE_MEM_ACCESS = 3'd4;
-    localparam STATE_RESPOND    = 3'd5;
+    localparam STATE_IDLE       = 4'd0;
+    localparam STATE_FETCH      = 4'd1;
+    localparam STATE_TRANSLATE  = 4'd2;
+    localparam STATE_ECC_GEN    = 4'd3;
+    localparam STATE_MEM_ACCESS = 4'd4;
+    localparam STATE_AFE_SENSE  = 4'd5;
+    localparam STATE_REFRESH    = 4'd6;
+    localparam STATE_RESPOND    = 4'd7;
 
-    reg [2:0] state;
+    reg [3:0] state;
     
     // Command registers
     reg        curr_op;
@@ -123,34 +133,39 @@ module ftj_top_controller #(
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            state        <= STATE_IDLE;
-            sq_rd_en     <= 1'b0;
-            mem_wr_en    <= 1'b0;
-            mem_rd_en    <= 1'b0;
-            mem_addr     <= 0;
-            mem_wr_data  <= 0;
-            curr_op      <= 1'b0;
-            curr_lba     <= 0;
-            curr_data    <= 0;
-            curr_pba     <= 0;
-            ecc_dec_in_data <= 0;
+            state             <= STATE_IDLE;
+            sq_rd_en          <= 1'b0;
+            mem_wr_en         <= 1'b0;
+            mem_rd_en         <= 1'b0;
+            mem_addr          <= 0;
+            mem_wr_data       <= 0;
+            curr_op           <= 1'b0;
+            curr_lba          <= 0;
+            curr_data         <= 0;
+            curr_pba          <= 0;
+            ecc_dec_in_data   <= 0;
             ecc_dec_in_parity <= 0;
+            refresh_block_ptr <= 0;
+            refresh_pending   <= 1'b0;
             
             // Initialize direct map L2P table (Default: Identity Map)
             for (i = 0; i < 256; i = i + 1) begin
                 ftl_l2p_map[i] <= i;
             end
             
-            // Initialize wear table
+            // Initialize wear and disturb tables
             for (i = 0; i < BLOCKS; i = i + 1) begin
                 ftl_wear_table[i] <= 0;
+                ftl_disturb_table[i] <= 0;
             end
         end else begin
             case (state)
                 STATE_IDLE: begin
                     mem_wr_en <= 1'b0;
                     mem_rd_en <= 1'b0;
-                    if (!sq_empty) begin
+                    if (refresh_pending) begin
+                        state <= STATE_REFRESH;
+                    end else if (!sq_empty) begin
                         sq_rd_en <= 1'b1; // Pop from submission queue
                         state    <= STATE_FETCH;
                     end
@@ -187,9 +202,34 @@ module ftj_top_controller #(
                         mem_wr_en <= 1'b1;
                         // Increment wear cycle for physical block
                         ftl_wear_table[curr_pba[9:0]] <= ftl_wear_table[curr_pba[9:0]] + 1'b1;
-                    end else begin             // Read
+
+                        // Stress adjacent physical neighbor blocks (Half-Select Disturb Model)
+                        if (curr_pba[9:0] < (BLOCKS - 1)) begin
+                            ftl_disturb_table[curr_pba[9:0] + 1'b1] <= ftl_disturb_table[curr_pba[9:0] + 1'b1] + 1'b1;
+                            if (ftl_disturb_table[curr_pba[9:0] + 1'b1] >= DISTURB_LIMIT) begin
+                                refresh_pending   <= 1'b1;
+                                refresh_block_ptr <= curr_pba + 1'b1;
+                            end
+                        end
+                        state <= STATE_RESPOND;
+                    end else begin             // Read (Triggers Analog Current Sense Amplifier)
                         mem_rd_en <= 1'b1;
+                        state     <= STATE_AFE_SENSE;
                     end
+                end
+
+                STATE_AFE_SENSE: begin
+                    // Analog Front-End sensing latency cycle (Current integrator / TER thresholding)
+                    mem_rd_en <= 1'b0;
+                    state     <= STATE_RESPOND;
+                end
+
+                STATE_REFRESH: begin
+                    // Autonomous In-situ polarization restore pulse on disturbed bitcells
+                    mem_addr <= refresh_block_ptr;
+                    mem_wr_en <= 1'b1;
+                    ftl_disturb_table[refresh_block_ptr[9:0]] <= 0; // Clear disturb counter
+                    refresh_pending <= 1'b0;
                     state <= STATE_RESPOND;
                 end
 

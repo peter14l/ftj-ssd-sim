@@ -1,0 +1,44 @@
+ftj_analysis_tool: starting
+
+== Running workloads with overprovisioning=0% (phys=67108864) ==
+Creating FTJController (phys_cap=67108864)... created. Calling LatencyInjector::Calibrate()... calibrated.
+ Starting Random4K_Mixed workload... -> Random4K_Mixed70_30: WAF=2.05013, TP=6.36207e-09 MB/s
+ Starting SequentialLargeWrites workload... -> Sequential_128K_Writes: WAF=1, TP=8.72154 MB/s
+ -> DB_WAL_8K_Append: WAF=1, TP=9.03292 MB/s
+ -> Estimated physical TB/day = 0.000000 TB/day
+ -> (For reference) Equivalent NAND lifetime (3k P/E) = 173623.966 years
+
+[Info] Analysis written to docs/ANALYSIS_RESULTS.md
+ftj_analysis_tool: starting
+
+== Running workloads with overprovisioning=7% (phys=71806976) ==
+Creating FTJController (phys_cap=71806976)... created. Calling LatencyInjector::Calibrate()... calibrated.
+ Starting Random4K_Mixed workload... -> Random4K_Mixed70_30: WAF=2.04647, TP=3.34357 MB/s
+ Starting SequentialLargeWrites workload... -> Sequential_128K_Writes: WAF=1, TP=9.67871 MB/s
+ -> DB_WAL_8K_Append: WAF=1, TP=9.60818 MB/s
+ -> Estimated physical TB/day = 0.758677 TB/day
+ -> (For reference) Equivalent NAND lifetime (3k P/E) = 0.001 years
+
+[Info] Analysis written to docs/ANALYSIS_RESULTS.md
+ftj_analysis_tool: starting
+
+== Running workloads with overprovisioning=28% (phys=85901312) ==
+Creating FTJController (phys_cap=85901312)... created. Calling LatencyInjector::Calibrate()... calibrated.
+ Starting Random4K_Mixed workload... -> Random4K_Mixed70_30: WAF=2.02263, TP=3.62225 MB/s
+ Starting SequentialLargeWrites workload... -> Sequential_128K_Writes: WAF=1, TP=10.8228 MB/s
+ -> DB_WAL_8K_Append: WAF=1, TP=10.969 MB/s
+ -> Estimated physical TB/day = 0.836068 TB/day
+ -> (For reference) Equivalent NAND lifetime (3k P/E) = 0.001 years
+
+[Info] Analysis written to docs/ANALYSIS_RESULTS.md
+ftj_analysis_tool: starting
+
+== Running workloads with overprovisioning=50% (phys=100663296) ==
+Creating FTJController (phys_cap=100663296)... created. Calling LatencyInjector::Calibrate()... calibrated.
+ Starting Random4K_Mixed workload... -> Random4K_Mixed70_30: WAF=2.01707, TP=3.72805 MB/s
+ Starting SequentialLargeWrites workload... -> Sequential_128K_Writes: WAF=1, TP=9.28466 MB/s
+ -> DB_WAL_8K_Append: WAF=1, TP=10.1729 MB/s
+ -> Estimated physical TB/day = 0.789682 TB/day
+ -> (For reference) Equivalent NAND lifetime (3k P/E) = 0.001 years
+
+[Info] Analysis written to docs/ANALYSIS_RESULTS.md

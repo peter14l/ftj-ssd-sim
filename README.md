@@ -1,347 +1,94 @@
-# FTJ Virtual Storage Engine & C++ Controller Framework
+# FTJ Memory Engine Simulator
 
-[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue?style=flat-square&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/20)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20%7C%20Server-0078D6?style=flat-square&logo=windows)](https://microsoft.com)
-[![Driver](https://img.shields.io/badge/Kernel%20Driver-WinFSP%20FSD-brightgreen?style=flat-square)](https://winfsp.dev)
-[![CMake](https://img.shields.io/badge/Build-CMake%203.15%2B-red?style=flat-square&logo=cmake)](https://cmake.org)
-[![License](https://img.shields.io/badge/License-Proprietary%20%2F%20Confidential-critical?style=flat-square)](#license--ip-notice)
-
-
-> **Low-latency, user-space virtual disk controller designed for next-generation Ferroelectric Tunnel Junction (FTJ) memory simulation and CXL/NVMe tiering.**
+A project simulating how next-generation **Ferroelectric Tunnel Junction (FTJ)** memory works inside solid-state drives (SSDs) and computer storage systems.
 
 ---
 
-## 🎯 Executive Vision: The Next-Gen AI SSD Solution
+## 💡 What Is This Project? (The Simple Explanation)
 
-This project is a hardware-software simulation framework for a **next-generation Solid State Drive (SSD)** designed to solve the two most critical bottlenecks in modern Artificial Intelligence (AI) and enterprise storage:
+### 1. The Problem With Today's SSDs
+* **They wear out:** Modern SSDs (flash drives) degrade every time you write data to them. After too many writes, they stop working.
+* **They can't overwrite data easily:** To update a tiny piece of information, a flash SSD has to erase a huge block of data first (which takes a long time and causes sudden slowdowns/lag spikes).
 
-### 1. The AI Storage Wear-Out Crisis (Durability)
-*   **The Problem:** Standard modern SSDs use 3D NAND Flash memory. Under heavy AI workloads (such as LLM KV-caching and vector database queries), standard SSDs wear out and die in a matter of months. This is because NAND cells physically degrade and fail after about 3,000 write cycles.
-*   **Our Solution:** This controller simulates **Ferroelectric Tunnel Junction (FTJ)** memory. FTJ cells store data using electrical polarization fields in thin-film Hafnium Oxide ($\text{HfO}_2$) instead of physically trapping electrons. This achieves **near-infinite write endurance ($>10^{10}$ write cycles)**, ensuring the SSD lasts for years under constant write pressure.
+### 2. The Solution (FTJ Memory)
+* **Near-infinite lifespan:** FTJ is a new type of memory chip that stores information using tiny electric fields instead of trapping electrons. You can write to it billions of times without wearing it out.
+* **Instant overwrites:** It lets the computer write directly to any exact byte of data instantly, without needing slow background erase cycles.
 
-### 2. The AI Hardware Inflation Crisis (Pricing)
-*   **The Problem:** High-performance storage and DRAM are extremely expensive and backordered due to the global monopoly on cutting-edge sub-7nm manufacturing foundries.
-*   **Our Solution:** Instead of targeting expensive sub-7nm nodes, our SSD controller architecture is designed for mature **28nm planar foundries**. Hafnium Oxide is standard in BEOL silicon processing, allowing standard mature foundries to print our memory chip layout with **zero retooling**, reducing initial startup manufacturing costs (mask sets) by over **20x** (from \$50M+ to \$2M).
-
----
-
-## Table of Contents
-
-1. [Project Overview](#project-overview--value-proposition)
-2. [Architecture & Memory Flow](#architecture--memory-flow)
-3. [Phase 1 — What Has Been Built](#phase-1--current-implementation)
-4. [Verified Performance Benchmarks](#verified-performance-benchmarks)
-5. [Build & Installation](#build--installation)
-6. [Running the Driver](#running-the-virtual-disk-server)
-7. [Benchmarking & Replication](#benchmarking--replication)
-8. [Roadmap](#future-roadmap)
-9. [License & IP Notice](#license--ip-notice)
+### 3. What This Repository Does
+This repository contains a **software simulator and hardware blueprints (Verilog)** that test how fast, reliable, and durable a storage drive would be if it were powered by this new FTJ memory technology.
 
 ---
 
-## Project Overview & Value Proposition
+## ⚙️ How It Works (Step-by-Step)
 
-The **FTJ Virtual Storage Engine** is a high-performance C++ user-space storage controller that simulates the physical read/write characteristics of **Ferroelectric Tunnel Junction (FTJ)** non-volatile memory technology.
-
-In silicon, FTJ cells achieve:
-
-| Property | Value |
-|:---|:---|
-| Read Latency | ~8 ns |
-| Write Latency | ~300 ns |
-| Endurance | >10¹⁰ cycles |
-| Retention | >10 years at 85 °C |
-
-This framework bridges those hardware properties with user-space software via **WinFSP** (Windows File System Proxy) and lock-free NVMe-style queuing, enabling systems engineers, database architects, and hardware designers to profile production workloads **before** physical tape-out.
-
-### Core Value Proposition
-
-| Target Workload | Benefit |
-|:---|:---|
-| **AI KV-Cache / Vector DB** | Sub-10 µs latency non-volatile cache at memory-tier bandwidth |
-| **PostgreSQL / RocksDB WAL** | Deterministic write latency replaces fsync jitter |
-| **CXL Pooled Memory** | Validates enterprise memory-pooling architectures in software |
-| **Hardware Pre-Silicon** | Stress-tests controller firmware logic before costly tapeout |
+1. **The Fast Lane (Queues):** Incoming read and write requests are placed into a fast, wait-free ring buffer so CPU threads don't block each other.
+2. **The Memory Simulator:** The C++ code (`ftj_engine.cpp`) calculates real-world physics: how electric voltage travels through the chip wires, how temperature changes performance, and how long reads and writes take.
+3. **Error Protection (SECDED ECC):** If heat or electrical noise ever flips a bit from a `0` to a `1`, the built-in error corrector detects and fixes it automatically.
+4. **Hardware Chip Design:** The `hdl/` folder contains actual synthesizable Verilog code that can be loaded onto an FPGA board to test the controller logic in real hardware.
 
 ---
 
-## Architecture & Memory Flow
+## 📊 Quick Performance Comparison
 
-```text
-╔══════════════════════════════════════════════════════════════╗
-║        User Application / FIO Benchmark / Database           ║
-╚═════════════════════════════╦════════════════════════════════╝
-                              ║  Standard Win32 File I/O API
-                              ▼
-╔══════════════════════════════════════════════════════════════╗
-║        Windows I/O Manager + WinFSP Kernel FSD (Ring-0)      ║
-╚═════════════════════════════╦════════════════════════════════╝
-                              ║  User-Kernel Dispatch (IRP ──► FSP)
-                              ▼
-╔══════════════════════════════════════════════════════════════╗
-║     ftj_vdisk_srv.exe  ──  User-Space Daemon (Ring-3)        ║
-║                                                              ║
-║   [ FSP_FILE_SYSTEM_INTERFACE Callback Vector (C++20) ]      ║
-║     GetVolumeInfo │ Open │ Read │ Write │ ReadDirectory ...  ║
-╚═════════════════════════════╦════════════════════════════════╝
-                              ║  Direct in-process function call
-                              ▼
-╔══════════════════════════════════════════════════════════════╗
-║        Lock-Free MPMC Ring Buffer  (LockFreeRingBuffer)      ║
-║                                                              ║
-║   Submission Queue ──► [ Atomic Head/Tail ] ──► Completion   ║
-║        Dmitriy Vyukov MPMC — Zero Lock Contention            ║
-╚═════════════════════════════╦════════════════════════════════╝
-                              ║  TSC-calibrated busy-wait loop
-                              ▼
-╔══════════════════════════════════════════════════════════════╗
-║        FTJController  ──  In-Memory Simulation Backend       ║
-║                                                              ║
-║   LatencyInjector::Calibrate()  ──  rdtsc / rdtscp           ║
-║   Read Path:  8 ns   physical gate switching simulation      ║
-║   Write Path: 300 ns polarization flip simulation            ║
-║   Backing Store: SRAM / RAM allocation (128 MiB default)     ║
-╚══════════════════════════════════════════════════════════════╝
-```
+| Feature | Regular Flash SSDs | Simulated FTJ SSD | Why It Matters |
+| :--- | :--- | :--- | :--- |
+| **Read Speed** | ~25 microseconds (slow) | **8 nanoseconds (instant)** | ~3,000x faster response time |
+| **Write Speed** | ~100 microseconds | **300 nanoseconds** | ~300x faster writes |
+| **Block Erase Delay** | ~3 milliseconds | **0 ms (None needed)** | Eliminates sudden stutter/lag spikes |
+| **Lifespan (Endurance)**| ~3,000 writes per cell | **>10 Billion writes** | Drive won't burn out from constant writes |
 
 ---
 
-## Phase 1 — Current Implementation
+## 🛠️ How to Build and Run
 
-Phase 1 is **complete**. The following capabilities are fully operational:
+### Requirements
+* **Operating System:** Windows 10 / 11 (64-bit)
+* **Compiler:** Visual Studio 2022 (with C++ Desktop Development)
+* **Build Tool:** CMake 3.15 or newer
+* **Optional:** WinFSP (if you want to mount it as a virtual Windows drive)
 
-### Lock-Free Architecture
-- **MPMC Circular Ring Buffers** using `std::atomic` with Dmitriy Vyukov's sequence-based algorithm — zero spinlocks, zero kernel primitives in the hot path.
-- **NVMeQueuePair** model implementing submission and completion queue semantics matching real NVMe controller firmware behavior.
-- **Multi-threaded Queue Depth Sweeps** from QD-1 to QD-64 exercised across 8 parallel worker threads.
-
-### WinFSP Kernel Driver Integration
-- Full **user-space file system driver** built on `FspFileSystemCreate` and `FspServiceRun`.
-- C++20 designated-initializer callback table (`FSP_FILE_SYSTEM_INTERFACE`) guarantees layout-safe, version-independent dispatch routing.
-- Pre-populated virtual disk file (`Y:\ftj_disk.bin`, 128 MiB) backed directly by the FTJ controller SRAM store.
-- Verified operation: `dir Y:\`, `Get-ChildItem Y:\`, and `fio` benchmark tools all resolve correctly.
-
-### Latency Injection Engine
-- **`LatencyInjector::Calibrate()`** performs a once-per-run TSC frequency calibration referenced to `QueryPerformanceCounter`.
-- Nanosecond-accurate busy-wait loops bypass OS scheduling jitter to faithfully simulate gate-switching and polarization physics.
-
----
-
-## Verified Performance Benchmarks
-
-Results from a 30-second sustained FIO run on `Y:\ftj_disk.bin` (128 MiB virtual backend). **Zero errors and zero packet drops** across 60+ GiB of cumulative stress traffic.
-
-| Workload | Block Size | Queue Depth | IOPS | Throughput | Median Latency |
-|:---|:---:|:---:|---:|---:|---:|
-| Random Write | 4 KiB | QD-32 | **205,000** | **801 MiB/s** | 553.00 µs |
-| Random Read | 4 KiB | QD-1 | **183,000** | **714 MiB/s** | **6.81 µs** |
-| Mixed 70 / 30 (Read) | 4 KiB | QD-16 | 126,210 | 494 MiB/s | 7.45 µs |
-| Mixed 70 / 30 (Write) | 4 KiB | QD-16 | 54,090 | 212 MiB/s | 8.64 µs |
-| **Combined Mixed** | 4 KiB | QD-16 | **180,300** | **706 MiB/s** | — |
-
-> **Note:** QD-1 random-read median latency of **6.81 µs** demonstrates true memory-tier access characteristics unreachable by contemporary NVMe SSDs (typ. 70–90 µs).
-
----
-
-## Build & Installation
-
-### Prerequisites
-
-| Requirement | Version | Notes |
-|:---|:---|:---|
-| Windows | 10 / 11 / Server 2022 | 64-bit (x64) required |
-| MSVC | 2022 (v143) | C++20 support required |
-| CMake | 3.15 + | `cmake.exe` on PATH |
-| WinFSP SDK | 1.12 + | Default install path assumed |
-| FIO (optional) | 3.x | For benchmark replication |
-
-WinFSP SDK download: [winfsp.dev/rel](https://winfsp.dev/rel/)
-
-### Build Commands
+### Step 1: Build the Project
+Open PowerShell in this folder and run:
 
 ```powershell
-# Configure (Visual Studio 2022, x64 Release)
+# Generate Visual Studio solution
 cmake -B build -G "Visual Studio 17 2022" -A x64
 
-# Build all targets
+# Build in Release mode
 cmake --build build --config Release
 ```
 
-Or use the included build script:
+### Step 2: Run the Benchmark Suite
+To test the speed and error correction:
 
 ```powershell
-.\build.ps1
+.\build\Release\ftj_sim_cli.exe
 ```
 
-**Output binaries:**
-
-```
-build/Release/
-├── ftj_sim_cli.exe       ← Synthetic benchmark CLI (queue-depth sweeps)
-├── ftj_vdisk_srv.exe     ← Virtual disk server daemon
-└── winfsp-x64.dll        ← Auto-copied WinFSP runtime (post-build step)
-```
-
----
-
-## Running the Virtual Disk Server
-
-Launch the virtual disk server and mount it at drive letter `Y:`:
+### Step 3: Run the Live Terminal Dashboard
+To see live speed meters and a visual wear-out map:
 
 ```powershell
-# Launch in background (PowerShell)
-$proc = Start-Process `
-    -FilePath ".\build\Release\ftj_vdisk_srv.exe" `
-    -ArgumentList "-m", "Y:" `
-    -WorkingDirectory $PWD `
-    -PassThru -NoNewWindow
-
-# Verify mount
-dir Y:\
-```
-
-**Expected output:**
-```
- Volume in drive Y is FTJFS
- Volume Serial Number is 2087-xxxx
-
- Directory of Y:\
-
-08-08-2026  ...    134,217,728 ftj_disk.bin
-               1 File(s)  134,217,728 bytes
-```
-
-**Unmount and stop:**
-```powershell
-Stop-Process -Id $proc.Id -Force
-```
-
-## Interactive Simulation & Diagnostics
-
-The project includes two interactive interfaces to monitor the simulator's telemetry, physical wear-out, and ECC behavior in real-time.
-
-### 1. Graphical Web Dashboard
-Open the standalone web dashboard in any browser to interactively stress-test the drive, monitor thermal states, and watch the wear heatmap change:
-- **Location**: [`docs/dashboard.html`](file:///D:/FTJ-SSD-Sim/docs/dashboard.html) (double-click to run).
-- **Features**: Live charts, interactive PCB data-flow animation, thermal throttle warnings, and dynamic ECC telemetry logs.
-
-### 2. Console TUI Monitor (Terminal Dashboard)
-Run the C++ simulator with the `--tui` argument to launch a live diagnostics panel inside your Command Prompt or PowerShell:
-```powershell
-# Run the terminal dashboard
 .\build\Release\ftj_sim_cli.exe --tui
 ```
-- **Features**: Live IOPS/Throughput updates, automated workload generator, and an 8x8 regional wear heatmap showcasing physical memory degradation and SECDED Hamming correction.
+
+### Step 4: Open the Graphical Dashboard
+Double-click [`docs/dashboard.html`](file:///D:/FTJ-SSD-Sim/docs/dashboard.html) in your browser to view interactive charts, thermal telemetry, and chip data flow.
 
 ---
 
-## Benchmarking & Replication
+## 📁 Repository Structure
 
-### Replicate 205,000 IOPS — 4K QD-32 Random Write
-
-```cmd
-fio --name=ftj_write_qd32 ^
-    --filename=Y:\ftj_disk.bin ^
-    --ioengine=windowsaio ^
-    --rw=randwrite ^
-    --bs=4k ^
-    --direct=1 ^
-    --size=100M ^
-    --iodepth=32 ^
-    --runtime=30 ^
-    --time_based ^
-    --group_reporting
-```
-
-### Replicate 6.81 µs Latency — 4K QD-1 Random Read
-
-```cmd
-fio --name=ftj_read_qd1 ^
-    --filename=Y:\ftj_disk.bin ^
-    --ioengine=windowsaio ^
-    --rw=randread ^
-    --bs=4k ^
-    --direct=1 ^
-    --size=100M ^
-    --iodepth=1 ^
-    --runtime=30 ^
-    --time_based ^
-    --group_reporting
-```
-
-### Mixed 70/30 Read/Write Workload
-
-```cmd
-fio --name=ftj_mixed ^
-    --filename=Y:\ftj_disk.bin ^
-    --ioengine=windowsaio ^
-    --rw=randrw ^
-    --rwmixread=70 ^
-    --bs=4k ^
-    --direct=1 ^
-    --size=100M ^
-    --iodepth=16 ^
-    --runtime=30 ^
-    --time_based ^
-    --group_reporting
-```
+* [`include/ftj_engine.hpp`](file:///D:/FTJ-SSD-Sim/include/ftj_engine.hpp) — Header file defining the controller, queue structures, and physics calculations.
+* [`src/ftj_engine.cpp`](file:///D:/FTJ-SSD-Sim/src/ftj_engine.cpp) — Core simulation logic (voltage calculations, error correction, and memory read/write).
+* [`src/main.cpp`](file:///D:/FTJ-SSD-Sim/src/main.cpp) — Benchmark tests and the terminal monitor (TUI).
+* [`src/tests.cpp`](file:///D:/FTJ-SSD-Sim/src/tests.cpp) — Unit tests for error correction, queues, and multi-threaded read/write safety.
+* [`hdl/`](file:///D:/FTJ-SSD-Sim/hdl/) — Verilog hardware designs for FPGA chips (`ftj_top_controller.v`).
+* [`docs/`](file:///D:/FTJ-SSD-Sim/docs/) — Documentation, architecture diagrams, and the web dashboard.
 
 ---
 
-## Future Roadmap
+## 📄 License & IP Notice
 
-```text
-  ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐
-  │   PHASE 1 ✅     │      │   PHASE 2 🔄     │      │   PHASE 3 📋     │      │   PHASE 4 🚀     │
-  │  Core Engine     │ ───► │  IP & Startup    │ ───► │  Hardware Sim    │ ───► │  Commercial      │
-  │  WinFSP Driver   │      │  Launch          │      │  Telemetry       │      │  Licensing       │
-  └──────────────────┘      └──────────────────┘      └──────────────────┘      └──────────────────┘
-```
-
-### Phase 2 — IP Protection & Startup Launch *(Current Focus)*
-
-- [ ] **Grant Applications:** 2-page executive brief targeting NIDHI-PRAYAS (DST) and MeitY TIDE 2.0 deep-tech incubation programs.
-- [ ] **Provisional Patents:** File IP filings covering:
-  - Lock-free wear-leveling algorithms designed for write-asymmetric non-volatile memory.
-  - Transient domain polarization simulation engines with leakage-current modelling.
-- [ ] **Linux / CXL Prototype:** Port the ring-buffer engine to a Linux kernel module targeting CXL Type-2 device interfaces.
-
-### Phase 3 — Hardware Simulation & Custom IOCTL Telemetry
-
-- [ ] **Endurance Degradation Model:** Inject physical write amplification, polarization decay, and bit-flip error rates as a function of cumulative Terabytes Written (TBW).
-- [ ] **ECC Simulation:** Implement BCH/LDPC error-correction simulation inside the read path at configurable BER thresholds.
-- [ ] **Custom Win32 IOCTL Interface:** Expose `DeviceIoControl` endpoints for real-time controller telemetry:
-  - Queue depth occupancy histogram
-  - Simulated die temperature
-  - Wear-leveling metrics & endurance budget
-
-### Phase 4 — Commercial IP Licensing & Enterprise Pilots
-
-- [ ] **WAL Acceleration Package:** Certified integration guides and pre-built modules for PostgreSQL, MySQL, and RocksDB WAL-path acceleration.
-- [ ] **CXL Tiering Partners:** Enterprise evaluation pilots with memory-pooling OEM vendors (targeting CXL 2.0 / 3.0 fabrics).
-- [ ] **SDS SDK Release:** Software-Defined Storage SDK enabling third-party controller firmware emulation on commodity server hardware.
-- [ ] **Persistent Memory Sticks (NVDIMM/CXL RAM):** Expand controller Verilog designs to support:
-  - **NVDIMM Architecture**: Fitting standard DDR4/DDR5 slots by tricking the host CPU memory controller and disabling DRAM refresh cycles.
-  - **CXL Type-3 Memory Expansion**: Implementing memory pool expansion over standard PCIe slots to combat hardware inflation.
-
----
-
-## License & IP Notice
-
-**Copyright © 2026. All Rights Reserved.**
-
-This software repository and all associated artifacts contain **confidential and proprietary** intellectual property relating to:
-
-- Ferroelectric Tunnel Junction (FTJ) memory controller simulation architectures
-- Lock-free wear-leveling and queue management algorithms
-- TSC-calibrated nanosecond-precision latency injection engines
-
-**No portion of this repository** — including source code, documentation, architecture diagrams, or benchmark methodologies — may be reproduced, distributed, modified, sublicensed, or used for commercial purposes without explicit written authorization from the copyright holder.
-
-Patent applications pending. Trade secret protections apply.
-
----
-
-<p align="center">
-  <em>Built with precision. Designed for the next generation of non-volatile memory.</em>
-</p>
+Copyright © 2026. All Rights Reserved.  
+This project contains proprietary simulation algorithms and hardware controller architectures. For evaluation or academic inquiries, please contact the repository owner.

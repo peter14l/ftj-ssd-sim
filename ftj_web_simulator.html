@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FTJ SSD Controller - Interactive Board Simulator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #141c2f;
+            --accent-primary: #00f0ff;
+            --accent-green: #39ff14;
+            --accent-yellow: #ffd700;
+            --accent-red: #ff3131;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --pcb-green: #07261a;
+            --pcb-trace: #00ff66;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        header {
+            padding: 24px 40px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        header h1 span {
+            color: var(--accent-primary);
+        }
+
+        .badge {
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            color: var(--accent-primary);
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 24px;
+            padding: 32px 40px;
+            flex-grow: 1;
+            max-width: 1600px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .simulator-pane {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .board-view {
+            position: relative;
+            background: radial-gradient(circle at center, #142828 0%, #061111 100%);
+            border: 1px solid rgba(0, 240, 255, 0.1);
+            border-radius: 16px;
+            height: 480px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* The M.2 SSD PCB representation */
+        .ssd-pcb {
+            position: relative;
+            width: 800px;
+            height: 240px;
+            background-color: var(--pcb-green);
+            border: 3px solid #004d26;
+            border-radius: 8px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            padding-left: 60px;
+        }
+
+        /* Gold Fingers Connector */
+        .gold-fingers {
+            position: absolute;
+            left: 0;
+            top: 20px;
+            width: 15px;
+            height: 200px;
+            background: repeating-linear-gradient(
+                to bottom,
+                #ffd700,
+                #ffd700 4px,
+                #000 4px,
+                #000 6px
+            );
+            border-right: 2px solid #b8860b;
+        }
+
+        /* Copper Traces (Animated Canvas Overlay) */
+        #traces-canvas {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* Hardware Components on PCB */
+        .component {
+            position: absolute;
+            background-color: #1e1e1e;
+            border: 2px solid #333;
+            border-radius: 4px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: 'JetBrains Mono', monospace;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .component:hover {
+            border-color: var(--accent-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(0, 240, 255, 0.2);
+        }
+
+        .controller-chip {
+            left: 140px;
+            top: 50px;
+            width: 140px;
+            height: 140px;
+            background: radial-gradient(circle at center, #2d2d2d 0%, #151515 100%);
+            border: 2px solid #555;
+        }
+
+        .controller-chip::before {
+            content: '';
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border: 1px dashed rgba(0, 240, 255, 0.3);
+            border-radius: 2px;
+        }
+
+        .controller-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--accent-primary);
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+            z-index: 1;
+        }
+
+        .controller-sub {
+            font-size: 8px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            z-index: 1;
+        }
+
+        .dram-chip {
+            left: 310px;
+            top: 80px;
+            width: 90px;
+            height: 80px;
+            background-color: #222;
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
+
+        .nand-chip {
+            top: 40px;
+            width: 150px;
+            height: 160px;
+            background: linear-gradient(135deg, #1b1b1b 0%, #111111 100%);
+            border: 2px solid #3c3c3c;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .nand-1 { left: 440px; }
+        .nand-2 { left: 610px; }
+
+        .nand-title {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        /* Sector matrix inside NAND to simulate wear visually */
+        .nand-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            width: 100%;
+            height: 110px;
+            margin-top: 8px;
+        }
+
+        .cell {
+            background-color: rgba(57, 255, 20, 0.15);
+            border: 1px solid rgba(57, 255, 20, 0.3);
+            border-radius: 1px;
+            transition: all 0.3s ease;
+        }
+
+        /* Sidebar Panels */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .panel-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .metric-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .metric-value.highlight {
+            color: var(--accent-primary);
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .btn {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn.primary {
+            background-color: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: var(--bg-color);
+        }
+
+        .btn.primary:hover {
+            background-color: #00d2df;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+        }
+
+        .btn.warning {
+            background-color: rgba(255, 215, 0, 0.1);
+            border-color: var(--accent-yellow);
+            color: var(--accent-yellow);
+        }
+
+        .btn.warning:hover {
+            background-color: rgba(255, 215, 0, 0.2);
+        }
+
+        .btn.danger {
+            background-color: rgba(255, 49, 49, 0.1);
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .btn.danger:hover {
+            background-color: rgba(255, 49, 49, 0.2);
+        }
+
+        /* Detail/Explanation Panel */
+        .info-card {
+            background-color: rgba(0, 240, 255, 0.03);
+            border: 1px solid rgba(0, 240, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .info-card h4 {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--accent-primary);
+            margin-bottom: 8px;
+        }
+
+        .info-card p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* Log window showing real-time execution */
+        .console-log {
+            background-color: #05070a;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            height: 140px;
+            overflow-y: auto;
+            color: #00ff66;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+        }
+
+        .console-line {
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
+
+        .console-line.warn { color: var(--accent-yellow); }
+        .console-line.err { color: var(--accent-red); }
+        .console-line.info { color: var(--accent-primary); }
+
+        /* Dialogs */
+        .modal {
+            display: none;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background-color: var(--card-bg);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 500px;
+            padding: 32px;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>FTJ Storage Engine <span>Hardware Simulator</span></h1>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <div class="badge">Vibe Coded Edition</div>
+            <div id="status-light" style="width: 12px; height: 12px; border-radius: 50%; background-color: var(--accent-green); box-shadow: 0 0 10px var(--accent-green);"></div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="simulator-pane">
+            <div class="board-view">
+                <!-- Glowing SSD Physical PCB Schematic -->
+                <div class="ssd-pcb" id="ssd-board">
+                    <div class="gold-fingers"></div>
+                    <canvas id="traces-canvas"></canvas>
+
+                    <!-- FTJ Controller -->
+                    <div class="component controller-chip" onclick="showInfo('controller')">
+                        <div class="controller-title">FTJ CONTROLLER</div>
+                        <div class="controller-sub">Verilog Engine + ECC</div>
+                    </div>
+
+                    <!-- DRAM Buffer -->
+                    <div class="component dram-chip" onclick="showInfo('dram')">
+                        DRAM BUFFER
+                        <div style="font-size: 8px; margin-top: 4px;">FTL Mapping</div>
+                    </div>
+
+                    <!-- NAND Flash Chip 1 -->
+                    <div class="component nand-chip nand-1" onclick="showInfo('nand1')">
+                        <div class="nand-title">NAND FLASH 1</div>
+                        <div class="nand-grid" id="grid-nand1"></div>
+                    </div>
+
+                    <!-- NAND Flash Chip 2 -->
+                    <div class="component nand-chip nand-2" onclick="showInfo('nand2')">
+                        <div class="nand-title">NAND FLASH 2</div>
+                        <div class="nand-grid" id="grid-nand2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Execution Logs -->
+            <div class="card">
+                <div class="panel-title">Real-Time Controller Console Output</div>
+                <div class="console-log" id="console-output">
+                    <div class="console-line info">[INIT] FTJ Storage Engine Hardware Simulator loaded successfully.</div>
+                    <div class="console-line info">[INIT] Vibe coding AI logic calibrated: Wear leveling and SECDED ECC online.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Telemetry & Controls Sidebar -->
+        <div class="sidebar">
+            <div class="card">
+                <div class="panel-title">Telemetry & Metrics</div>
+                
+                <div class="metric-row">
+                    <span class="metric-label">Drive Capacity</span>
+                    <span class="metric-value">1.0 TB (Simulated)</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Throughput</span>
+                    <span class="metric-value highlight" id="throughput-val">0.00 MB/s</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">IOPS</span>
+                    <span class="metric-value highlight" id="iops-val">0 IOPS</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Max Wear Level</span>
+                    <span class="metric-value" id="wear-val">0.0%</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Single-Bit Errors Corrected</span>
+                    <span class="metric-value" style="color: var(--accent-yellow);" id="ecc-corrected-val">0</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Uncorrectable Failures</span>
+                    <span class="metric-value" style="color: var(--accent-red);" id="ecc-fail-val">0</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="panel-title">Simulator Controls</div>
+                <div class="controls-grid">
+                    <button class="btn primary" id="btn-workload" onclick="toggleWorkload()">Start Random R/W Workload</button>
+                    <button class="btn warning" onclick="injectBitFlip(1)">Inject Single-Bit Flip</button>
+                    <button class="btn danger" onclick="injectBitFlip(2)">Inject Double-Bit Flip</button>
+                    <button class="btn" onclick="clearTelemetry()">Reset Drive Metrics</button>
+                </div>
+
+                <div class="info-card" id="info-overlay">
+                    <h4 id="info-title">Host Interface Info</h4>
+                    <p id="info-text">Click on any component on the SSD board layout (like the Gold fingers, DRAM, Controller, or NAND chips) to explore how the hardware logic operates under real conditions.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Detail Modal -->
+    <div class="modal" id="detail-modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+            <h2 id="modal-title" style="margin-bottom: 16px; color: var(--accent-primary);">Component details</h2>
+            <div id="modal-body" style="font-size: 14px; line-height: 1.6; color: var(--text-secondary);"></div>
+        </div>
+    </div>
+
+    <script>
+        // Setup grids
+        const nand1 = document.getElementById('grid-nand1');
+        const nand2 = document.getElementById('grid-nand2');
+        const cells1 = [];
+        const cells2 = [];
+
+        // Build 64 sectors for NAND 1
+        for (let i = 0; i < 64; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.wear = 0;
+            nand1.appendChild(cell);
+            cells1.push(cell);
+        }
+
+        // Build 64 sectors for NAND 2
+        for (let i = 0; i < 64; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.wear = 0;
+            nand2.appendChild(cell);
+            cells2.push(cell);
+        }
+
+        // Canvas animation setup
+        const canvas = document.getElementById('traces-canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Particles in flight
+        let particles = [];
+
+        class Particle {
+            constructor(startX, startY, endX, endY, color, type) {
+                this.x = startX;
+                this.y = startY;
+                this.startX = startX;
+                this.startY = startY;
+                this.endX = endX;
+                this.endY = endY;
+                this.color = color;
+                this.progress = 0;
+                this.speed = 0.05;
+                this.type = type; // 'write' or 'read'
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = this.color;
+                ctx.fill();
+                ctx.shadowBlur = 0; // reset
+            }
+
+            update() {
+                this.progress += this.speed;
+                this.x = this.startX + (this.endX - this.startX) * this.progress;
+                this.y = this.startY + (this.endY - this.startY) * this.progress;
+                return this.progress >= 1.0;
+            }
+        }
+
+        // SSD Metrics
+        let isWorkloadRunning = false;
+        let workloadInterval = null;
+        let throughput = 0;
+        let iops = 0;
+        let maxWear = 0.0;
+        let eccCorrected = 0;
+        let eccFailed = 0;
+
+        function log(message, type = 'info') {
+            const out = document.getElementById('console-output');
+            const el = document.createElement('div');
+            el.className = `console-line ${type}`;
+            el.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            out.appendChild(el);
+            out.scrollTop = out.scrollHeight;
+        }
+
+        function toggleWorkload() {
+            const btn = document.getElementById('btn-workload');
+            if (isWorkloadRunning) {
+                btn.textContent = "Start Random R/W Workload";
+                btn.classList.remove('danger');
+                isWorkloadRunning = false;
+                clearInterval(workloadInterval);
+                log("Workload thread stopped.");
+                iops = 0;
+                throughput = 0.0;
+                updateStats();
+            } else {
+                btn.textContent = "Stop Active Workload";
+                btn.classList.add('danger');
+                isWorkloadRunning = true;
+                log("Workload thread initialized. Generating host write requests...");
+                workloadInterval = setInterval(runMockOp, 150);
+            }
+        }
+
+        function runMockOp() {
+            const isWrite = Math.random() < 0.6; // 60% writes
+            iops = Math.floor(Math.random() * 50) + 120;
+            throughput = (iops * 4096) / (1024 * 1024);
+
+            // Coordinates for tracing flows
+            // Gold fingers around x=10, y=120
+            // Controller around x=210, y=120
+            // DRAM around x=355, y=120
+            // NAND 1 center around x=515, y=120
+            // NAND 2 center around x=685, y=120
+
+            if (isWrite) {
+                // PCIe -> Controller
+                particles.push(new Particle(10, 120, 210, 120, '#00ff66', 'write'));
+                setTimeout(() => {
+                    // Controller -> NAND
+                    const targetNand = Math.random() < 0.5 ? 1 : 2;
+                    const endX = targetNand === 1 ? 515 : 685;
+                    particles.push(new Particle(210, 120, endX, 120, '#00ff66', 'write'));
+                    
+                    // Increment wear on target NAND sector
+                    incrementSectorWear(targetNand);
+                }, 300);
+            } else {
+                // Read: NAND -> Controller -> PCIe
+                const targetNand = Math.random() < 0.5 ? 1 : 2;
+                const startX = targetNand === 1 ? 515 : 685;
+                particles.push(new Particle(startX, 120, 210, 120, '#00f0ff', 'read'));
+                setTimeout(() => {
+                    particles.push(new Particle(210, 120, 10, 120, '#00f0ff', 'read'));
+                }, 300);
+            }
+
+            updateStats();
+        }
+
+        function incrementSectorWear(nandNum) {
+            const cells = nandNum === 1 ? cells1 : cells2;
+            const targetIdx = Math.floor(Math.random() * 64);
+            const cell = cells[targetIdx];
+            let wear = parseFloat(cell.dataset.wear) + 0.5;
+            
+            if (wear > 100.0) wear = 100.0;
+            cell.dataset.wear = wear;
+
+            // Update cell visual styling based on wear
+            if (wear > 75.0) {
+                cell.style.backgroundColor = 'rgba(255, 49, 49, 0.8)';
+                cell.style.borderColor = 'var(--accent-red)';
+            } else if (wear > 40.0) {
+                cell.style.backgroundColor = 'rgba(255, 215, 0, 0.6)';
+                cell.style.borderColor = 'var(--accent-yellow)';
+            } else {
+                // Dynamic opacity transition from fresh green to soft yellow-green
+                cell.style.backgroundColor = `rgba(57, 255, 20, ${0.15 + (wear/40)*0.45})`;
+            }
+
+            // Track max wear level globally
+            if (wear > maxWear) {
+                maxWear = wear;
+            }
+        }
+
+        function injectBitFlip(severity) {
+            log(`Manual error injection triggered: severity ${severity}-bit flip.`, 'warn');
+            const targetNand = Math.random() < 0.5 ? 1 : 2;
+            const cells = targetNand === 1 ? cells1 : cells2;
+            const targetIdx = Math.floor(Math.random() * 64);
+            const cell = cells[targetIdx];
+
+            // Render warning flash on board
+            particles.push(new Particle(210, 120, targetNand === 1 ? 515 : 685, 120, '#ffd700', 'error'));
+
+            setTimeout(() => {
+                if (severity === 1) {
+                    eccCorrected++;
+                    log(`[ECC Engine] Single-bit flip detected at NAND ${targetNand} Sector ${targetIdx}. SECDED Hamming code corrected it dynamically!`, 'info');
+                    cell.style.backgroundColor = 'var(--accent-yellow)';
+                    setTimeout(() => { cell.style.backgroundColor = 'rgba(57, 255, 20, 0.3)'; }, 800);
+                } else {
+                    eccFailed++;
+                    log(`[ECC Engine] Double-bit uncorrectable flip detected at NAND ${targetNand} Sector ${targetIdx}. Host read returned uncorrectable read failure status!`, 'err');
+                    cell.style.backgroundColor = 'var(--accent-red)';
+                    document.getElementById('status-light').style.backgroundColor = 'var(--accent-red)';
+                    document.getElementById('status-light').style.shadowColor = 'var(--accent-red)';
+                    setTimeout(() => { 
+                        document.getElementById('status-light').style.backgroundColor = 'var(--accent-green)'; 
+                    }, 2000);
+                }
+                updateStats();
+            }, 300);
+        }
+
+        function updateStats() {
+            document.getElementById('throughput-val').textContent = `${throughput.toFixed(2)} MB/s`;
+            document.getElementById('iops-val').textContent = `${iops} IOPS`;
+            document.getElementById('wear-val').textContent = `${maxWear.toFixed(1)}%`;
+            document.getElementById('ecc-corrected-val').textContent = eccCorrected;
+            document.getElementById('ecc-fail-val').textContent = eccFailed;
+        }
+
+        function clearTelemetry() {
+            log("Resetting all wear-leveling and ECC statistics.");
+            iops = 0;
+            throughput = 0.0;
+            maxWear = 0.0;
+            eccCorrected = 0;
+            eccFailed = 0;
+            
+            cells1.forEach(c => {
+                c.dataset.wear = 0;
+                c.style.backgroundColor = 'rgba(57, 255, 20, 0.15)';
+                c.style.borderColor = 'rgba(57, 255, 20, 0.3)';
+            });
+            cells2.forEach(c => {
+                c.dataset.wear = 0;
+                c.style.backgroundColor = 'rgba(57, 255, 20, 0.15)';
+                c.style.borderColor = 'rgba(57, 255, 20, 0.3)';
+            });
+
+            updateStats();
+        }
+
+        // Animation Loop
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw visual copper trace connections
+            ctx.strokeStyle = 'rgba(0, 255, 102, 0.1)';
+            ctx.lineWidth = 2;
+            
+            // Trace PCIe fingers to controller
+            ctx.beginPath();
+            ctx.moveTo(10, 120);
+            ctx.lineTo(140, 120);
+            ctx.stroke();
+
+            // Trace controller to NAND 1 and NAND 2
+            ctx.beginPath();
+            ctx.moveTo(280, 120);
+            ctx.lineTo(610, 120);
+            ctx.stroke();
+
+            // Update and draw particles
+            particles = particles.filter(p => {
+                const finished = p.update();
+                p.draw();
+                return !finished;
+            });
+
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // Component overlays & dialog details
+        const infoOverlay = document.getElementById('info-overlay');
+        const infoTitle = document.getElementById('info-title');
+        const infoText = document.getElementById('info-text');
+
+        const componentData = {
+            controller: {
+                title: "FTJ SSD Controller (Verilog ASIC Core)",
+                text: "The main processor of the SSD. It executes the synthesizable Verilog HDL FTL engine, schedules read/write workloads via NVMe queues, maps logical sectors, and implements the Hamming SECDED ECC engine to dynamically detect and correct NAND bit corruption.",
+                detailed: "<h3>FTJ Custom SSD Controller</h3><br><p>This component represents the synthesizable Verilog controller logic we wrote. It acts as the brain of the SSD, housing the following hardware blocks:</p><br><ul><li><b>NVMe Queues</b>: Multi-producer, multi-consumer submission/completion circular rings to feed requests from the PCIe host bus.</li><li><b>FTL Address Engine</b>: Implements direct-mapped L2P (Logical-to-Physical) cache mappings to maximize throughput.</li><li><b>SECDED Hamming Codec</b>: Automatically appends an 8-bit parity signature for every 64-bit word written, and cleans single-bit errors instantly on reads.</li></ul>"
+            },
+            dram: {
+                title: "DRAM Cache Buffer",
+                text: "High-speed volatile memory used by the controller to store active L2P tables. This prevents slow, repetitive reads from the physical NAND when translating LBA queries to physical page sectors.",
+                detailed: "<h3>DRAM Translation Cache</h3><br><p>Standard consumer SSDs store translation tables in volatile DRAM. When a read/write operation is requested, the controller performs a sub-nanosecond lookup in DRAM instead of querying the physical flash blocks directly. This reduces read amplification and latency."
+            },
+            nand1: {
+                title: "NAND Flash Chip Group 1",
+                text: "The physical 3D NAND memory chips where data is stored. Each cell has a limited number of Program/Erase (P/E) cycles before it starts leaking charges, creating bit flips that trigger ECC correction.",
+                detailed: "<h3>NAND Flash Memory Matrix</h3><br><p>Physical memory blocks degrade under write stress. In this simulator, each cell in the NAND grid changes opacity from green to yellow, and finally to warning red as it undergoes cumulative write cycles. Once wear exceeds 100% threshold limits, the cells will begin throwing bit corruption errors on read requests, demonstrating the necessity of the wear leveling algorithm."
+            },
+            nand2: {
+                title: "NAND Flash Chip Group 2",
+                text: "The second memory array chip. The FTL wear-leveling logic dynamically routes write commands to the least-worn physical blocks here to prevent early drive failure.",
+                detailed: "<h3>Wear Leveling Target</h3><br><p>When Group 1 NAND chips face hot write streams, the FTL wear-leveling algorithm redirects incoming blocks dynamically to the cooler, less-worn blocks of Group 2 NAND to preserve overall drive integrity and prevent a single dead chip from killing the entire drive."
+            }
+        };
+
+        function showInfo(comp) {
+            const data = componentData[comp];
+            infoTitle.textContent = data.title;
+            infoText.textContent = data.text;
+            
+            // Open full detail modal
+            document.getElementById('modal-title').textContent = data.title;
+            document.getElementById('modal-body').innerHTML = data.detailed;
+            document.getElementById('detail-modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('detail-modal').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

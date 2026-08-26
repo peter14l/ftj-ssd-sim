@@ -34,6 +34,15 @@ else()
     target_compile_options(ftj_sim_cli PRIVATE -Wall -Wextra -Werror)
 endif()
 
+# Analysis tool for WAF/TBW/Cost modeling
+add_executable(ftj_analysis_tool src/analysis_tool.cpp)
+target_link_libraries(ftj_analysis_tool PRIVATE ftj_engine)
+if(MSVC)
+    target_compile_options(ftj_analysis_tool PRIVATE /W4 /WX /permissive- /utf-8)
+else()
+    target_compile_options(ftj_analysis_tool PRIVATE -Wall -Wextra -Werror)
+endif()
+
 # Define a small tests executable
 add_executable(ftj_tests src/tests.cpp)
 target_link_libraries(ftj_tests PRIVATE ftj_engine)

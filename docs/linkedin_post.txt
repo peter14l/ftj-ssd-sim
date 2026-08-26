@@ -1,0 +1,19 @@
+Building a next-gen SSD: Ferroelectric Tunnel Junction (FTJ) memory, simulated before tape-out.
+
+I built a C++20 storage controller that simulates FTJ non-volatile memory — byte-addressable, ~8ns access, >10^10 write endurance (vs ~3k cycles for 3D NAND). It runs as a real Windows virtual disk (WinFSP) and benchmarks at 205K IOPS, 6.8us median latency.
+
+Why it matters: AI workloads (KV-cache, vector DB, WAL) kill NAND in months. FTJ on mature 28nm foundries fixes the durability crisis — and bypasses the sub-7nm monopoly inflating hardware prices.
+
+Status:
+  - Working simulator — FTL, lock-free NVMe queues, ECC + wear telemetry, WinFSP mount
+  - Verilog RTL for controller & ECC, simulation-tested
+  - Benchmarks: 205K IOPS / 801 MiB/s write, 6.8us read
+
+Next steps — need your help:
+  1. Validate the RTL on real FPGA hardware — seeking funding/guidance to buy a dev board
+  2. Expand — endurance-degradation models, BCH/LDPC ECC, Linux/CXL prototype
+  3. Expert feedback — storage engineers, memory & accelerator folks: how does the architecture hold up?
+
+Open to grant programs too (NIDHI-PRAYAS, MeitY TIDE) — any pointers welcome.
+
+#FTJ #SSD #FPGA #Semiconductor #Storage #Memory

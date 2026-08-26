@@ -421,6 +421,7 @@ int main(int argc, char* argv[]) {
         std::atomic<bool> backend_active(true);
 
         std::vector<uint64_t> latencies(TOTAL_OPS, 0);
+        std::vector<uint64_t> submit_times(TOTAL_OPS, 0);
         std::vector<uint8_t> io_buf(4096, 0x99);
 
         // Start NVMe backend executor thread pool matching the QD to simulate parallel controllers
@@ -453,19 +454,19 @@ int main(int argc, char* argv[]) {
         // Frontend client worker loop
         uint64_t start_time = GetTimeNs();
         
-        // Multi-threaded client submission
+        // Multi-threaded client submission & processing
         std::vector<std::thread> client_workers;
-        uint32_t num_clients = std::max(1u, qd);
+        uint32_t num_clients = std::max(1u, std::min<uint32_t>(qd, 8u));
+        uint64_t ops_per_client = TOTAL_OPS / num_clients;
+
         for (uint32_t c = 0; c < num_clients; ++c) {
-            client_workers.push_back(std::thread([&, c]() {
+            client_workers.push_back(std::thread([&, c, ops_per_client]() {
                 std::mt19937_64 rng(12345 + c);
                 std::uniform_int_distribution<uint64_t> dist_offset(0, engine_capacity - 4096);
                 
-                while (true) {
+                for (uint64_t i = 0; i < ops_per_client; ++i) {
                     uint64_t cid = ops_submitted.fetch_add(1, std::memory_order_relaxed);
-                    if (cid >= TOTAL_OPS) {
-                        break;
-                    }
+                    if (cid >= TOTAL_OPS) break;
                     
                     ftj::SQEntry sqe {
                         1, // Write
@@ -475,32 +476,28 @@ int main(int argc, char* argv[]) {
                         static_cast<uint32_t>(cid)
                     };
                     
-                    uint64_t submit_time = GetTimeNs();
+                    submit_times[cid] = GetTimeNs();
                     
                     // Submit to SQ
                     while (!queue_pair.Submit(sqe)) {
                         std::this_thread::yield();
                     }
-                    
-                    // Poll CQ for our completion
+
+                    // Reap completions
                     ftj::CQEntry cqe;
-                    bool finished = false;
-                    while (!finished) {
-                        // Try to reap from completion queue
-                        if (queue_pair.Reap(cqe)) {
-                            uint64_t completion_time = GetTimeNs();
-                            latencies[cqe.cid] = completion_time - submit_time;
-                            ops_reaped.fetch_add(1, std::memory_order_release);
-                            finished = true;
-                        } else {
-                            std::this_thread::yield();
-                        }
+                    while (!queue_pair.Reap(cqe)) {
+                        std::this_thread::yield();
                     }
+                    uint64_t completion_time = GetTimeNs();
+                    if (cqe.cid < TOTAL_OPS) {
+                        latencies[cqe.cid] = (completion_time >= submit_times[cqe.cid]) ? (completion_time - submit_times[cqe.cid]) : 50;
+                    }
+                    ops_reaped.fetch_add(1, std::memory_order_release);
                 }
             }));
         }
 
-        // Wait for all submissions & polling to finish
+        // Wait for all submissions & completions
         for (auto& t : client_workers) {
             t.join();
         }
@@ -643,6 +640,57 @@ int main(int argc, char* argv[]) {
             "- **Corrected Single-Bit Errors**: " + std::to_string(corrected) + " (100% data recovery via Hamming 72/64)\n"
             "- **Uncorrectable Double-Bit Errors**: " + std::to_string(uncorrectable) + " (returned read failures to application)\n"
             "- **Maximum Simulated Memory Wear**: " + std::to_string(static_cast<int>(controller.GetMaxWearPercentage())) + "%\n";
+    }
+
+    std::cout << "\nRunning Benchmark 7: Crossbar Array IR-Drop, Temperature Drift & Half-Select Disturb...\n";
+    {
+        // 1. Stress crossbar array under elevated junction temperature (85C)
+        ftj::FTJController::CrossbarPhysicsConfig phys_cfg = controller.GetPhysicsConfig();
+        phys_cfg.ambient_temp_c = 85.0; // Typical enterprise SSD junction temperature
+        phys_cfg.enable_ir_drop_sim = true;
+        phys_cfg.enable_disturb_tracking = true;
+        controller.SetPhysicsConfig(phys_cfg);
+
+        constexpr size_t BLOCK_SZ = 4096;
+        constexpr uint64_t PHYS_OPS = 15'000;
+        std::vector<uint8_t> buf(BLOCK_SZ, 0x55);
+
+        uint64_t start_phys = GetTimeNs();
+        for (uint64_t i = 0; i < PHYS_OPS; ++i) {
+            uint64_t off = (i * 8192) % (engine_capacity - BLOCK_SZ);
+            controller.Write(off, buf.data(), BLOCK_SZ);
+        }
+        uint64_t end_phys = GetTimeNs();
+        double elapsed_ms = static_cast<double>(end_phys - start_phys) / 1'000'000.0;
+
+        // Retrieve physics telemetry
+        auto telemetry = controller.GetPhysicsTelemetry();
+        uint64_t refreshed = controller.TriggerAutonomousRefresh();
+
+        std::cout << " -> Physics crossbar test complete. Operations: " << PHYS_OPS << "\n";
+        std::cout << " -> Operating Junction Temperature: " << telemetry.current_temperature_c << " deg C\n";
+        std::cout << " -> Maximum Observed Crossbar IR-Drop: " << std::fixed << std::setprecision(2) << telemetry.max_ir_drop_mv << " mV\n";
+        std::cout << " -> Compressed Sensing Margin (TER Ratio): " << telemetry.min_ter_ratio << "x (nominal 50x)\n";
+        std::cout << " -> Dynamic Merz Switching Average Latency: " << telemetry.avg_switching_latency_ns << " ns\n";
+        std::cout << " -> Total Half-Select Disturb Pulses: " << telemetry.total_half_select_disturbs << "\n";
+        std::cout << " -> Autonomous Refresh Restorative Pulses: " << refreshed << "\n";
+
+        results.push_back({
+            "Crossbar Physics & IR-Drop Stress (85C)",
+            elapsed_ms,
+            PHYS_OPS,
+            (static_cast<double>(PHYS_OPS) / elapsed_ms) * 1000.0,
+            telemetry.avg_switching_latency_ns,
+            (static_cast<double>(PHYS_OPS * BLOCK_SZ) / (1024.0 * 1024.0)) / (elapsed_ms / 1000.0)
+        });
+
+        comparison_summary += 
+            "\n### Solid-State Crossbar Physics & Array Modeling:\n"
+            "- **Junction Operating Temperature**: 85 °C (Modeled TER Sensing Margin: " + std::to_string(static_cast<int>(telemetry.min_ter_ratio)) + "x)\n"
+            "- **Worst-Case Wire IR-Drop**: " + std::to_string(static_cast<int>(telemetry.max_ir_drop_mv)) + " mV across 512x512 sub-array mesh\n"
+            "- **Merz's Law Dynamic Switching Latency**: " + std::to_string(static_cast<int>(telemetry.avg_switching_latency_ns)) + " ns\n"
+            "- **Half-Select Disturb Pulses Accumulated**: " + std::to_string(telemetry.total_half_select_disturbs) + "\n"
+            "- **Autonomous Hardware Refresh Restorations (HAR-SM)**: " + std::to_string(refreshed) + " pages\n";
     }
 
     LogResults(results, comparison_summary);

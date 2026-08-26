@@ -6,17 +6,18 @@ This document presents the performance metrics of the simulated byte-addressable
 
 | Benchmark Name | Operations | IOPS | Avg Latency (ns) | Throughput (MB/s) |
 | :--- | :---: | :---: | :---: | :---: |
-| Random 4K Writes (FTJ) | 50000 | 2169 | 461118.0 | 8.47 |
-| Sequential 256B R/W (FTJ) | 200000 | 31378 | 31869.7 | 7.66 |
-| Mixed 70/30 (4K FTJ) | 100000 | 2331 | 429036.9 | 9.10 |
-| QD-1 NVMe Queue | 50000 | 1622 | 485200.0 | 6.34 |
-| QD-4 NVMe Queue | 50000 | 1610 | 1698500.0 | 6.29 |
-| QD-16 NVMe Queue | 50000 | 1872 | 5612900.0 | 7.31 |
-| QD-32 NVMe Queue | 50000 | 1862 | 10960700.0 | 7.27 |
-| QD-64 NVMe Queue | 50000 | 1707 | 18435500.0 | 6.67 |
+| Random 4K Writes (FTJ) | 50000 | 2733 | 365850.6 | 10.68 |
+| Sequential 256B R/W (FTJ) | 200000 | 45653 | 21904.4 | 11.15 |
+| Mixed 70/30 (4K FTJ) | 100000 | 3420 | 292416.5 | 13.36 |
+| QD-1 NVMe Queue | 50000 | 655 | 440400.0 | 2.56 |
+| QD-4 NVMe Queue | 50000 | 1648 | 455300.0 | 6.44 |
+| QD-16 NVMe Queue | 50000 | 1799 | 441500.0 | 7.03 |
+| QD-32 NVMe Queue | 50000 | 1400 | 871500.0 | 5.47 |
+| QD-64 NVMe Queue | 50000 | 1856 | 439900.0 | 7.25 |
 | NAND-Comparison (FTJ Mode) | 20000 | 3333333 | 300.0 | 13020.83 |
 | NAND-Comparison (3D NAND Mode) | 20000 | 6812 | 146800.0 | 26.61 |
-| Wear/ECC Recovered Reads | 10000 | 913092 | 1095.2 | 6.97 |
+| Wear/ECC Recovered Reads | 10000 | 1350074 | 740.7 | 10.30 |
+| Crossbar Physics & IR-Drop Stress (85C) | 15000 | 2939 | 237.2 | 11.48 |
 
 ## Analysis & Comparison
 
@@ -32,4 +33,11 @@ This document presents the performance metrics of the simulated byte-addressable
 - **Corrected Single-Bit Errors**: 0 (100% data recovery via Hamming 72/64)
 - **Uncorrectable Double-Bit Errors**: 0 (returned read failures to application)
 - **Maximum Simulated Memory Wear**: 130%
+
+### Solid-State Crossbar Physics & Array Modeling:
+- **Junction Operating Temperature**: 85 °C (Modeled TER Sensing Margin: 29x)
+- **Worst-Case Wire IR-Drop**: 443 mV across 512x512 sub-array mesh
+- **Merz's Law Dynamic Switching Latency**: 237 ns
+- **Half-Select Disturb Pulses Accumulated**: 794932
+- **Autonomous Hardware Refresh Restorations (HAR-SM)**: 16384 pages
 

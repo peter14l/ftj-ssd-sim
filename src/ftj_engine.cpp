@@ -14,6 +14,7 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <stdexcept>
 #include <atomic>
@@ -127,8 +128,12 @@ FTJController::FTJController(size_t capacity_bytes, uint64_t latency_ns)
     // Initialize page writes (per 4KB page) - allocate atomic array
     size_t num_pages = (capacity_bytes + PAGE_SIZE - 1) / PAGE_SIZE;
     page_writes_.reset(new std::atomic<uint32_t>[num_pages]);
+    page_disturbs_.reset(new std::atomic<uint32_t>[num_pages]);
     page_count_ = num_pages;
-    for (size_t i = 0; i < num_pages; ++i) page_writes_[i].store(0, std::memory_order_relaxed);
+    for (size_t i = 0; i < num_pages; ++i) {
+        page_writes_[i].store(0, std::memory_order_relaxed);
+        page_disturbs_[i].store(0, std::memory_order_relaxed);
+    }
 
     // Initialize simple FTL structures
     num_blocks_ = static_cast<size_t>(num_pages / PAGES_PER_BLOCK);
@@ -162,6 +167,127 @@ FTJController::FTJController(size_t capacity_bytes, uint64_t latency_ns)
     gc_target_free_ = std::max<size_t>(1, page_count_ / 10);
 
     total_physical_bytes_written_.store(0, std::memory_order_relaxed);
+}
+
+void FTJController::SetPhysicsConfig(const CrossbarPhysicsConfig& config) noexcept {
+    std::lock_guard<std::mutex> lock(physics_mutex_);
+    physics_cfg_ = config;
+}
+
+FTJController::CrossbarPhysicsConfig FTJController::GetPhysicsConfig() const noexcept {
+    std::lock_guard<std::mutex> lock(physics_mutex_);
+    return physics_cfg_;
+}
+
+double FTJController::CalculateTERRatio(double temperature_c) const noexcept {
+    // Ferroelectric polarization decreases with temperature up to Curie temperature (Tc ~ 450C for HfO2)
+    // TER = (R_HRS - R_LRS) / R_LRS. At 25C TER ~ 50x. At 125C, TER compresses to ~18x.
+    double temp_clamped = std::clamp(temperature_c, 0.0, 150.0);
+    double degradation_factor = 1.0 - (temp_clamped - 25.0) * 0.0065;
+    if (degradation_factor < 0.2) degradation_factor = 0.2;
+    
+    double nominal_ter = (physics_cfg_.r_hrs_nominal_ohm - physics_cfg_.r_lrs_nominal_ohm) / physics_cfg_.r_lrs_nominal_ohm;
+    return nominal_ter * degradation_factor;
+}
+
+double FTJController::CalculateEffectiveVoltage(uint64_t offset, bool is_write) const noexcept {
+    if (!physics_cfg_.enable_ir_drop_sim) {
+        return is_write ? physics_cfg_.v_applied_write : physics_cfg_.v_applied_read;
+    }
+
+    // Map offset to synthetic 2D crossbar sub-array coordinates (e.g. 512 x 512 bitcell sub-arrays)
+    constexpr uint32_t ARRAY_DIM = 512;
+    uint32_t cell_idx = static_cast<uint32_t>((offset / 8) % (ARRAY_DIM * ARRAY_DIM));
+    uint32_t row_x = cell_idx % ARRAY_DIM;
+    uint32_t col_y = cell_idx / ARRAY_DIM;
+
+    double v_applied = is_write ? physics_cfg_.v_applied_write : physics_cfg_.v_applied_read;
+
+    // Estimate sneak path leakage current through unselected cells mediated by 1S-1R selector
+    double unselected_cell_leakage = (v_applied / 2.0) / (physics_cfg_.r_hrs_nominal_ohm * physics_cfg_.selector_nonlinearity);
+    double total_line_current = (v_applied / physics_cfg_.r_lrs_nominal_ohm) + (unselected_cell_leakage * ARRAY_DIM);
+
+    // Cumulative wire resistance along Word-Line (row_x) and Bit-Line (col_y)
+    double r_total_wire = (row_x * physics_cfg_.r_wire_wl_ohm) + (col_y * physics_cfg_.r_wire_bl_ohm);
+    double ir_drop_volts = total_line_current * r_total_wire;
+
+    // Clamp drop to avoid inversion
+    if (ir_drop_volts > v_applied * 0.35) {
+        ir_drop_volts = v_applied * 0.35;
+    }
+
+    double ir_drop_mv = ir_drop_volts * 1000.0;
+    double prev_max = max_observed_ir_drop_mv_.load(std::memory_order_relaxed);
+    while (ir_drop_mv > prev_max && !max_observed_ir_drop_mv_.compare_exchange_weak(prev_max, ir_drop_mv, std::memory_order_relaxed)) {}
+
+    return std::max(0.1, v_applied - ir_drop_volts);
+}
+
+double FTJController::CalculateMerzSwitchingLatency(double v_eff_volts, bool is_write) const noexcept {
+    // Merz's Law: tau = tau_0 * exp(alpha * Activation_Field / V_effective)
+    // As V_effective drops due to IR drop, switching latency increases exponentially.
+    double base_latency = is_write ? 300.0 : 8.0; // ns
+    double v_nominal = is_write ? physics_cfg_.v_applied_write : physics_cfg_.v_applied_read;
+    
+    if (v_eff_volts >= v_nominal) {
+        return base_latency;
+    }
+
+    double delta_ratio = (v_nominal / v_eff_volts) - 1.0;
+    double penalty = std::exp(physics_cfg_.alpha_activation * delta_ratio);
+    return base_latency * penalty;
+}
+
+FTJController::PhysicsTelemetry FTJController::GetPhysicsTelemetry() const noexcept {
+    PhysicsTelemetry tel;
+    tel.max_ir_drop_mv = max_observed_ir_drop_mv_.load(std::memory_order_relaxed);
+    tel.current_temperature_c = physics_cfg_.ambient_temp_c;
+    tel.min_ter_ratio = CalculateTERRatio(tel.current_temperature_c);
+    
+    uint64_t ops = total_switching_ops_.load(std::memory_order_relaxed);
+    uint64_t accum = total_switching_latency_accum_ns_.load(std::memory_order_relaxed);
+    tel.avg_switching_latency_ns = (ops > 0) ? (static_cast<double>(accum) / ops) : static_cast<double>(latency_ns_);
+    
+    tel.total_half_select_disturbs = total_half_select_disturbs_.load(std::memory_order_relaxed);
+    tel.total_autonomous_refreshes = total_autonomous_refreshes_.load(std::memory_order_relaxed);
+    return tel;
+}
+
+uint64_t FTJController::TriggerAutonomousRefresh() noexcept {
+    uint64_t refreshed_pages = 0;
+    for (size_t p = 0; p < page_count_; ++p) {
+        uint32_t disturbs = page_disturbs_[p].load(std::memory_order_relaxed);
+        if (disturbs > 0) {
+            page_disturbs_[p].store(0, std::memory_order_relaxed);
+            refreshed_pages++;
+        }
+    }
+    total_autonomous_refreshes_.fetch_add(refreshed_pages, std::memory_order_relaxed);
+    return refreshed_pages;
+}
+
+void FTJController::SimulateRetentionDrift(double elapsed_hours, double temperature_c) noexcept {
+    // Arrhenius retention relaxation model: Tau_retention(T) = Tau_0 * exp(E_a / (k_B * T))
+    // Accelerated high-temperature baking increases bit flip probability
+    double t_kelvin = temperature_c + 273.15;
+    constexpr double k_b = 8.617333e-5; // eV/K
+    constexpr double e_a = 1.1;         // Activation energy for HfO2 polarization relaxation (~1.1 eV)
+    
+    double thermal_rate = std::exp(-e_a / (k_b * t_kelvin));
+    double drift_prob = 1.0 - std::exp(-thermal_rate * elapsed_hours * 3600.0 * 1e8);
+    drift_prob = std::clamp(drift_prob, 0.0, 0.08); // Maximum 8% bit degradation under extreme stress
+
+    for (size_t p = 0; p < page_count_; ++p) {
+        if (phys_valid_[p]) {
+            double rand_val = static_cast<double>(SimpleRand(g_seed) % 10000) / 10000.0;
+            if (rand_val < drift_prob) {
+                // Introduce bit-flip into physical page
+                size_t byte_pos = static_cast<size_t>(p * PAGE_SIZE + (SimpleRand(g_seed) % PAGE_SIZE));
+                memory_buffer_[byte_pos] ^= (1 << (SimpleRand(g_seed) % 8));
+                total_bit_flips_.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+    }
 }
 
 FTJController::~FTJController() = default;
@@ -269,34 +395,45 @@ bool FTJController::Read(uint64_t offset, void* dest, size_t size) const noexcep
         return false;
     }
 
-    // Inject exact simulated latency
-    injector_.Inject();
+    // Compute physics-accurate effective voltage and switching latency
+    double v_eff = CalculateEffectiveVoltage(offset, false);
+    double dynamic_latency_ns = CalculateMerzSwitchingLatency(v_eff, false);
+    
+    total_switching_latency_accum_ns_.fetch_add(static_cast<uint64_t>(dynamic_latency_ns), std::memory_order_relaxed);
+    total_switching_ops_.fetch_add(1, std::memory_order_relaxed);
+
+    // Inject simulated latency
+    if (dynamic_latency_ns > latency_ns_) {
+        LatencyInjector dynamic_injector(static_cast<uint64_t>(dynamic_latency_ns));
+        dynamic_injector.Inject();
+    } else {
+        injector_.Inject();
+    }
 
     uint8_t* dest_bytes = static_cast<uint8_t*>(dest);
-    size_t dest_offset = 0;
-    bool success = true;
-
     uint64_t start_byte = offset;
     uint64_t end_byte = offset + size;
+    size_t dest_offset = 0;
+    bool success = true;
 
     std::lock_guard<std::mutex> lg(mapping_mutex_);
 
     while (start_byte < end_byte) {
-        uint64_t lp = start_byte / PAGE_SIZE; // logical page
+        uint64_t lp = start_byte / PAGE_SIZE;
         uint64_t page_offset = start_byte % PAGE_SIZE;
         uint64_t to_copy = std::min(end_byte - start_byte, static_cast<uint64_t>(PAGE_SIZE - page_offset));
 
         int32_t phys = (lp < l2p_map_.size()) ? l2p_map_[lp] : -1;
-        if (phys == -1) {
-            // unmapped reads return zeros
-            for (uint64_t i = 0; i < to_copy; ++i) dest_bytes[dest_offset++] = 0;
+        if (phys < 0 || !phys_valid_[phys]) {
+            // Unwritten / unmapped page: return zeros
+            std::memset(dest_bytes + dest_offset, 0, static_cast<size_t>(to_copy));
+            dest_offset += static_cast<size_t>(to_copy);
         } else {
-            // For ECC and bitflip simulation we iterate per 8-byte chunk within this region
-            uint64_t chunk_start = (static_cast<uint64_t>(phys) * PAGE_SIZE + page_offset) / 8;
-            uint64_t chunk_end = (static_cast<uint64_t>(phys) * PAGE_SIZE + page_offset + to_copy - 1) / 8;
+            // Read 8-byte chunks, validate ECC and apply bit error simulation if degraded
+            uint64_t chunk_start = (static_cast<uint64_t>(phys) * PAGE_SIZE + page_offset) & ~7ULL;
+            uint64_t chunk_end = (static_cast<uint64_t>(phys) * PAGE_SIZE + page_offset + to_copy + 7) & ~7ULL;
 
-            for (uint64_t chunk = chunk_start; chunk <= chunk_end; ++chunk) {
-                uint64_t chunk_offset = chunk * 8;
+            for (uint64_t chunk_offset = chunk_start; chunk_offset < chunk_end; chunk_offset += 8) {
                 uint64_t local_offset = chunk_offset - static_cast<uint64_t>(phys) * PAGE_SIZE;
                 uint64_t start_b = (local_offset < page_offset) ? page_offset : local_offset;
                 uint64_t end_b = std::min<uint64_t>(local_offset + 8, page_offset + to_copy);
@@ -306,8 +443,13 @@ bool FTJController::Read(uint64_t offset, void* dest, size_t size) const noexcep
                 uint8_t stored_ecc = ecc_buffer_[(static_cast<size_t>(phys) * PAGE_SIZE + local_offset) / 8];
 
                 uint32_t writes = page_writes_[phys].load(std::memory_order_relaxed);
-                if (writes > WEAR_THRESHOLD) {
-                    double prob = static_cast<double>(writes - WEAR_THRESHOLD) / WEAR_THRESHOLD * 0.05;
+                uint32_t disturbs = page_disturbs_[phys].load(std::memory_order_relaxed);
+                
+                // Bit error probability combining write wear, disturb, and temperature TER compression
+                if (writes > WEAR_THRESHOLD || disturbs > physics_cfg_.half_select_disturb_threshold) {
+                    double prob = static_cast<double>(writes > WEAR_THRESHOLD ? (writes - WEAR_THRESHOLD) : 0) / WEAR_THRESHOLD * 0.03;
+                    prob += static_cast<double>(disturbs) / (physics_cfg_.half_select_disturb_threshold * 10.0);
+                    
                     double rand_val = static_cast<double>(SimpleRand(g_seed) % 10000) / 10000.0;
                     if (rand_val < prob) {
                         int bit1 = SimpleRand(g_seed) % 64;
@@ -346,8 +488,20 @@ bool FTJController::Write(uint64_t offset, const void* src, size_t size) noexcep
         return false;
     }
 
-    // Inject exact simulated latency
-    injector_.Inject();
+    // Compute physics-accurate write voltage and Merz's Law switching latency
+    double v_eff = CalculateEffectiveVoltage(offset, true);
+    double dynamic_latency_ns = CalculateMerzSwitchingLatency(v_eff, true);
+
+    total_switching_latency_accum_ns_.fetch_add(static_cast<uint64_t>(dynamic_latency_ns), std::memory_order_relaxed);
+    total_switching_ops_.fetch_add(1, std::memory_order_relaxed);
+
+    // Inject simulated latency
+    if (dynamic_latency_ns > latency_ns_) {
+        LatencyInjector dynamic_injector(static_cast<uint64_t>(dynamic_latency_ns));
+        dynamic_injector.Inject();
+    } else {
+        injector_.Inject();
+    }
 
     const uint8_t* src_bytes = static_cast<const uint8_t*>(src);
     uint64_t start_byte = offset;
@@ -415,6 +569,13 @@ bool FTJController::Write(uint64_t offset, const void* src, size_t size) noexcep
         block_valid_count_[phys_block_[new_phys]]++;
         page_writes_[new_phys].fetch_add(1, std::memory_order_relaxed);
         total_physical_bytes_written_.fetch_add(PAGE_SIZE, std::memory_order_relaxed);
+
+        // Apply half-select disturb to neighboring physical pages in the same crossbar sub-block
+        if (physics_cfg_.enable_disturb_tracking && page_count_ > 1) {
+            int32_t neighbor_page = (new_phys + 1) % static_cast<int32_t>(page_count_);
+            page_disturbs_[neighbor_page].fetch_add(1, std::memory_order_relaxed);
+            total_half_select_disturbs_.fetch_add(1, std::memory_order_relaxed);
+        }
 
         // Old physical page becomes invalid (not immediately freed until GC)
         if (old_phys >= 0) {

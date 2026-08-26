@@ -100,6 +100,44 @@ void TestControllerConcurrentRW() {
     for (auto &t : readers) t.join();
 }
 
+void TestCrossbarPhysics() {
+    FTJController ctrl(1024 * 1024, 8);
+    auto cfg = ctrl.GetPhysicsConfig();
+    cfg.ambient_temp_c = 75.0;
+    cfg.enable_ir_drop_sim = true;
+    cfg.enable_disturb_tracking = true;
+    ctrl.SetPhysicsConfig(cfg);
+
+    // Verify TER ratio calculation
+    double ter_75 = ctrl.CalculateTERRatio(75.0);
+    assert(ter_75 < 50.0 && ter_75 > 10.0);
+    (void)ter_75;
+
+    // Verify IR drop and Merz latency
+    double v_eff = ctrl.CalculateEffectiveVoltage(1024 * 64, true);
+    assert(v_eff <= cfg.v_applied_write && v_eff > 0.5);
+    (void)v_eff;
+
+    double lat = ctrl.CalculateMerzSwitchingLatency(v_eff, true);
+    assert(lat >= 300.0);
+    (void)lat;
+
+    // Perform writes and verify disturb accumulation & refresh
+    std::vector<uint8_t> data(4096, 0x7E);
+    for (int i = 0; i < 50; ++i) {
+        ctrl.Write(i * 4096, data.data(), data.size());
+    }
+
+    auto telem = ctrl.GetPhysicsTelemetry();
+    assert(telem.total_half_select_disturbs > 0);
+    assert(telem.max_ir_drop_mv > 0.0);
+    (void)telem;
+
+    uint64_t refreshed = ctrl.TriggerAutonomousRefresh();
+    assert(refreshed > 0);
+    (void)refreshed;
+}
+
 int main() {
     try {
         std::cout << "Starting TestECC()...\n" << std::flush;
@@ -113,6 +151,10 @@ int main() {
         std::cout << "Starting TestControllerConcurrentRW()...\n" << std::flush;
         TestControllerConcurrentRW();
         std::cout << "TestControllerConcurrentRW() passed.\n" << std::flush;
+
+        std::cout << "Starting TestCrossbarPhysics()...\n" << std::flush;
+        TestCrossbarPhysics();
+        std::cout << "TestCrossbarPhysics() passed.\n" << std::flush;
     } catch (...) {
         std::cerr << "Test threw exception\n";
         return 2;

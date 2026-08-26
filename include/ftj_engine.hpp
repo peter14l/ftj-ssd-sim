@@ -53,6 +53,51 @@ public:
     // Byte-addressable write operation with exact latency injection, wear updates, and ECC generation
     bool Write(uint64_t offset, const void* src, size_t size) noexcept;
 
+    // Physics-accurate crossbar array & solid-state device parameters
+    struct CrossbarPhysicsConfig {
+        double ambient_temp_c = 25.0;            // Operating junction temperature in Celsius (25C - 125C)
+        double r_wire_wl_ohm = 1.8;              // Word-line wire resistance per bitcell (Ohms)
+        double r_wire_bl_ohm = 1.8;              // Bit-line wire resistance per bitcell (Ohms)
+        double v_applied_write = 2.4;            // Nominal applied write pulse (Volts)
+        double v_applied_read = 0.6;             // Nominal applied read pulse (Volts)
+        double r_lrs_nominal_ohm = 10000.0;      // Low Resistance State (LRS) ~10 kOhm
+        double r_hrs_nominal_ohm = 500000.0;     // High Resistance State (HRS) ~500 kOhm (TER ~ 50x)
+        double alpha_activation = 0.85;          // Merz's Law activation exponent
+        double selector_v_th = 1.2;              // 1S-1R threshold switch voltage (Volts)
+        double selector_nonlinearity = 1000.0;   // 1S-1R ON/OFF current selectivity ratio
+        uint32_t half_select_disturb_threshold = 100000; // Cycles before half-selected cells lose polarization
+        bool enable_ir_drop_sim = true;          // Enable dynamic IR-drop calculation
+        bool enable_disturb_tracking = true;     // Enable half-select disturb tracking
+    };
+
+    // Telemetry structure for hardware physics metrics
+    struct PhysicsTelemetry {
+        double max_ir_drop_mv;
+        double min_ter_ratio;
+        double avg_switching_latency_ns;
+        uint64_t total_half_select_disturbs;
+        uint64_t total_autonomous_refreshes;
+        double current_temperature_c;
+    };
+
+    // Configure crossbar physics parameters
+    void SetPhysicsConfig(const CrossbarPhysicsConfig& config) noexcept;
+    CrossbarPhysicsConfig GetPhysicsConfig() const noexcept;
+
+    // Retrieve real-time physical simulation telemetry
+    PhysicsTelemetry GetPhysicsTelemetry() const noexcept;
+
+    // Trigger explicit autonomous refresh on half-selected disturbed bitcells
+    uint64_t TriggerAutonomousRefresh() noexcept;
+
+    // Simulate physical retention decay & temperature drift over time
+    void SimulateRetentionDrift(double elapsed_hours, double temperature_c) noexcept;
+
+    // Physics calculation helpers
+    double CalculateEffectiveVoltage(uint64_t offset, bool is_write) const noexcept;
+    double CalculateMerzSwitchingLatency(double v_eff_volts, bool is_write) const noexcept;
+    double CalculateTERRatio(double temperature_c) const noexcept;
+
     // Retrieve stats
     size_t GetCapacity() const noexcept { return capacity_; }
     uint64_t GetTotalReads() const noexcept { return total_reads_.load(std::memory_order_relaxed); }
@@ -83,6 +128,16 @@ private:
     // Tracks write counts per 4KB page (atomic array allocated on heap to avoid vector move requirements)
     std::unique_ptr<std::atomic<uint32_t>[]> page_writes_;
     size_t page_count_ = 0;
+
+    // Crossbar Physics Model State
+    CrossbarPhysicsConfig physics_cfg_;
+    mutable std::mutex physics_mutex_;
+    std::unique_ptr<std::atomic<uint32_t>[]> page_disturbs_; // Tracks half-select disturb counters per page
+    mutable std::atomic<uint64_t> total_half_select_disturbs_{0};
+    mutable std::atomic<uint64_t> total_autonomous_refreshes_{0};
+    mutable std::atomic<double> max_observed_ir_drop_mv_{0.0};
+    mutable std::atomic<uint64_t> total_switching_latency_accum_ns_{0};
+    mutable std::atomic<uint64_t> total_switching_ops_{0};
 
     // Simple log-structured FTL simulation (page-granular)
     static constexpr size_t PAGE_SIZE = 4096;
