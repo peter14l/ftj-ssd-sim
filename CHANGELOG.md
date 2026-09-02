@@ -53,8 +53,6 @@ manufacturers (Phison, Silicon Motion, Marvell). Verified on **native Windows 10
 - Pipeline: `read_verilog → hierarchy -check → proc → flatten → opt → memory →
   techmap → dfflibmap → abc → opt_clean → write_verilog → stat`
 - Outputs: `scripts/output/ftj_top_controller_netlist.v` and
-  `scripts/output/synthesis_report.log`
-
 **`scripts/ftj_controller_constraints.sdc`** *(new)*
 - SDC timing constraints for 100 MHz target clock
 - `create_clock` with 10 ns period on `clk`
@@ -62,7 +60,7 @@ manufacturers (Phison, Silicon Motion, Marvell). Verified on **native Windows 10
 - `set_multicycle_path 2` for NAND wait counters (pipelined across many cycles)
 
 **`scripts/run_synthesis.ps1`** *(new)*
-- **Primary Windows synthesis runner** (replaces any shell script)
+- **Primary Windows synthesis runner**
 - PowerShell 5.1+ / PS Core 7+ compatible
 - `-YosysPath` parameter (defaults to `"yosys"` in PATH)
 - Pre-flight validation: checks Yosys executable and all required HDL sources
@@ -70,6 +68,13 @@ manufacturers (Phison, Silicon Motion, Marvell). Verified on **native Windows 10
 - Parses `synthesis_report.log` for gate count, chip area (µm² and mm²),
   and estimates Fmax from ABC delay output
 - Colored PPA dashboard output using `Write-Host -ForegroundColor`
+
+**`scripts/run_synthesis.sh`** *(new)*
+- **Cross-platform Linux/macOS/WSL synthesis runner** companion to `run_synthesis.ps1`
+- Bash script with color-coded terminal PPA dashboard
+- Validates Yosys binary availability (with install suggestions per distro/OS)
+- Executes Yosys using forward-slash relative path syntax and parses gate count, physical area, and Fmax timing metrics
+
 
 **`verif/uvm/controller_transaction.sv`** *(new)*
 - `uvm_sequence_item` with AXI4 burst-aware randomized fields
@@ -204,14 +209,10 @@ manufacturers (Phison, Silicon Motion, Marvell). Verified on **native Windows 10
 
 ---
 
-### Removed
-- `run_synthesis.sh` — **not created**; `run_synthesis.ps1` is the sole
-  synthesis entry point for the Windows-native environment
-
----
-
 ### Technical Notes
+- **Cross-platform synthesis runners**: both `run_synthesis.ps1` (Windows PowerShell) and `run_synthesis.sh` (Linux/macOS/WSL) provided
 - **Clock/Reset convention**: `clk` (posedge) and `rst_n` (active-low)
+
   standardized across all new and modified files
 - **No WSL/Docker required**: all tooling paths assume native Windows
   Yosys (OSS CAD Suite) and Siemens Questa/ModelSim or Verilator Win64
