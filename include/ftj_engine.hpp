@@ -8,6 +8,7 @@
 #include <atomic>
 #include <mutex>
 #include <algorithm>
+#include <array>
 
 #ifdef _MSC_VER
 #pragma warning(disable: 4324)
@@ -293,6 +294,74 @@ public:
 private:
     LockFreeRingBuffer<SQEntry> sq_;
     LockFreeRingBuffer<CQEntry> cq_;
+};
+
+// ============================================================
+// NandMetrics — 3D NAND Telemetry for WAF / GC / Wear Tracking
+// ============================================================
+struct NandMetrics {
+    uint64_t gc_invocations;       // Total GC cycles triggered
+    uint64_t blocks_erased;        // Total NAND blocks erased
+    uint64_t pages_programmed;     // Total NAND page program ops
+    double   waf;                  // Write Amplification Factor (physical / logical)
+    uint32_t max_pe_cycles;        // Max P/E cycles seen across all blocks
+    double   wear_uniformity;      // Stddev of P/E distribution (0.0 = perfectly uniform)
+    size_t   active_queue_depth;   // Host writes pending in BurstCoalescer
+};
+
+// ============================================================
+// BurstCoalescer — Write-Coalescing Burst Buffer
+// Accepts chaotic random AI writes, coalesces into 4KB page-
+// aligned blocks, streams sequentially to the FTL layer.
+// Compile-time depth override: -DCOALESCE_DEPTH=512
+// ============================================================
+#ifndef COALESCE_DEPTH
+#   define COALESCE_DEPTH 256u
+#endif
+
+class BurstCoalescer {
+public:
+    static constexpr size_t PAGE_SZ = 4096;
+    static constexpr size_t DEPTH   = COALESCE_DEPTH;
+
+    explicit BurstCoalescer();
+    ~BurstCoalescer() = default;
+
+    BurstCoalescer(const BurstCoalescer&) = delete;
+    BurstCoalescer& operator=(const BurstCoalescer&) = delete;
+
+    // Push a random sub-page host write. Internally merges into 4KB pages.
+    // Returns false if the staging buffer is full.
+    bool PushWrite(uint64_t lba_offset, const void* src, size_t size) noexcept;
+
+    // Flush fully-coalesced pages as sequential page-aligned blocks to FTL.
+    // Returns the number of pages flushed.
+    size_t FlushToFTL(FTJController& ftl, size_t max_pages = 64) noexcept;
+
+    // --- Telemetry ---
+    double   GetWAF()          const noexcept;
+    size_t   GetPendingPages() const noexcept;
+    size_t   GetQueueDepth()   const noexcept;
+    NandMetrics GetNandMetrics() const noexcept;
+    void     Reset() noexcept;
+
+private:
+    struct alignas(64) CoalescePage {
+        std::array<uint8_t, PAGE_SZ> data   {};
+        uint32_t                     bytes_committed = 0;
+        bool                         dirty           = false;
+        uint64_t                     base_lba        = 0;
+    };
+
+    std::unique_ptr<CoalescePage[]>   staging_;       // DEPTH pages
+    size_t                            depth_;
+    mutable std::mutex                mtx_;
+    alignas(64) std::atomic<uint64_t> host_bytes_   {0};
+    alignas(64) std::atomic<uint64_t> flash_bytes_  {0};
+    alignas(64) std::atomic<uint64_t> gc_calls_     {0};
+    alignas(64) std::atomic<uint64_t> blocks_erased_{0};
+    alignas(64) std::atomic<uint64_t> pages_prog_   {0};
+    alignas(64) std::atomic<uint64_t> queue_depth_  {0};
 };
 
 } // namespace ftj

@@ -511,6 +511,18 @@
                     <span class="metric-label">Uncorrectable Failures</span>
                     <span class="metric-value" style="color: var(--accent-red);" id="ecc-fail-val">0</span>
                 </div>
+                <div class="metric-row">
+                    <span class="metric-label">Write Amplification Factor</span>
+                    <span class="metric-value" id="waf-val">1.00×</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">GC Invocations</span>
+                    <span class="metric-value" id="gc-val">0</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Active Queue Depth</span>
+                    <span class="metric-value" id="queue-depth-val">0</span>
+                </div>
             </div>
 
             <div class="card">
@@ -618,6 +630,9 @@
         let maxWear = 0.0;
         let eccCorrected = 0;
         let eccFailed = 0;
+        let waf = 1.00;
+        let gcInvocations = 0;
+        let queueDepth = 0;
 
         function log(message, type = 'info') {
             const out = document.getElementById('console-output');
@@ -680,6 +695,16 @@
                 setTimeout(() => {
                     particles.push(new Particle(210, 120, 10, 120, '#00f0ff', 'read'));
                 }, 300);
+            }
+
+            // Simulate BurstCoalescer queue and GC
+            if (isWrite) {
+                queueDepth = Math.min(256, queueDepth + 1);
+            }
+            if (queueDepth >= 16) {
+                gcInvocations++;
+                waf = parseFloat((1.0 + (gcInvocations * 0.002)).toFixed(2));
+                queueDepth = Math.max(0, queueDepth - 8);
             }
 
             updateStats();
@@ -748,6 +773,9 @@
             document.getElementById('wear-val').textContent = `${maxWear.toFixed(1)}%`;
             document.getElementById('ecc-corrected-val').textContent = eccCorrected;
             document.getElementById('ecc-fail-val').textContent = eccFailed;
+            document.getElementById('waf-val').textContent          = `${waf.toFixed(2)}×`;
+            document.getElementById('gc-val').textContent           = gcInvocations;
+            document.getElementById('queue-depth-val').textContent  = queueDepth;
         }
 
         function clearTelemetry() {
@@ -757,6 +785,9 @@
             maxWear = 0.0;
             eccCorrected = 0;
             eccFailed = 0;
+            waf = 1.00;
+            gcInvocations = 0;
+            queueDepth = 0;
             
             cells1.forEach(c => {
                 c.dataset.wear = 0;

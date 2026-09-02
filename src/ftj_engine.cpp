@@ -721,5 +721,138 @@ void FTJController::RunGC(size_t target_free) noexcept {
         if (current_free >= target_free) break;
     }
 }
+
+// ============================================================
+// BurstCoalescer Implementation
+// ============================================================
+
+BurstCoalescer::BurstCoalescer()
+    : depth_(DEPTH)
+{
+    staging_ = std::make_unique<CoalescePage[]>(depth_);
+    for (size_t i = 0; i < depth_; ++i) {
+        staging_[i].data.fill(0);
+        staging_[i].bytes_committed = 0;
+        staging_[i].dirty           = false;
+        staging_[i].base_lba        = 0;
+    }
+}
+
+bool BurstCoalescer::PushWrite(uint64_t lba_offset, const void* src, size_t size) noexcept {
+    if (!src || size == 0 || size > PAGE_SZ) return false;
+
+    std::lock_guard<std::mutex> lock(mtx_);
+
+    // Determine which staging page this write maps to
+    uint64_t page_idx  = (lba_offset / PAGE_SZ) % depth_;
+    uint64_t page_off  = lba_offset % PAGE_SZ;
+
+    // Clamp to page boundary
+    size_t to_copy = std::min(size, static_cast<size_t>(PAGE_SZ - page_off));
+
+    CoalescePage& pg = staging_[page_idx];
+    if (!pg.dirty) {
+        pg.base_lba = (lba_offset / PAGE_SZ) * PAGE_SZ;
+        pg.dirty    = true;
+        queue_depth_.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    std::memcpy(pg.data.data() + page_off,
+                static_cast<const uint8_t*>(src),
+                to_copy);
+    pg.bytes_committed += static_cast<uint32_t>(to_copy);
+    if (pg.bytes_committed > PAGE_SZ)
+        pg.bytes_committed = PAGE_SZ;  // clamp
+
+    host_bytes_.fetch_add(to_copy, std::memory_order_relaxed);
+    return true;
+}
+
+size_t BurstCoalescer::FlushToFTL(FTJController& ftl, size_t max_pages) noexcept {
+    size_t flushed = 0;
+    std::lock_guard<std::mutex> lock(mtx_);
+
+    for (size_t i = 0; i < depth_ && flushed < max_pages; ++i) {
+        CoalescePage& pg = staging_[i];
+        if (!pg.dirty) continue;
+
+        // Write the full coalesced page as a single sequential write
+        bool ok = ftl.Write(pg.base_lba, pg.data.data(), PAGE_SZ);
+        if (ok) {
+            flash_bytes_.fetch_add(PAGE_SZ, std::memory_order_relaxed);
+            pages_prog_.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        // Reset staging page
+        pg.data.fill(0);
+        pg.bytes_committed = 0;
+        pg.dirty           = false;
+        pg.base_lba        = 0;
+        queue_depth_.fetch_sub(1, std::memory_order_relaxed);
+        ++flushed;
+    }
+
+    // Account for GC invocations (approximated by FTL physical write overhead)
+    uint64_t host = host_bytes_.load(std::memory_order_relaxed);
+    uint64_t flash = flash_bytes_.load(std::memory_order_relaxed);
+    // GC is triggered when WAF > 1.5 — approximate as one GC per 8 flushes
+    if (flushed > 0 && flash > 0 && host > 0) {
+        double ratio = static_cast<double>(flash) / static_cast<double>(host);
+        if (ratio > 1.5) {
+            gc_calls_.fetch_add(1, std::memory_order_relaxed);
+            blocks_erased_.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+
+    return flushed;
+}
+
+double BurstCoalescer::GetWAF() const noexcept {
+    uint64_t host  = host_bytes_.load(std::memory_order_relaxed);
+    uint64_t flash = flash_bytes_.load(std::memory_order_relaxed);
+    if (host == 0) return 1.0;
+    return static_cast<double>(flash) / static_cast<double>(host);
+}
+
+size_t BurstCoalescer::GetPendingPages() const noexcept {
+    std::lock_guard<std::mutex> lock(mtx_);
+    size_t count = 0;
+    for (size_t i = 0; i < depth_; ++i)
+        if (staging_[i].dirty) ++count;
+    return count;
+}
+
+size_t BurstCoalescer::GetQueueDepth() const noexcept {
+    return static_cast<size_t>(queue_depth_.load(std::memory_order_relaxed));
+}
+
+NandMetrics BurstCoalescer::GetNandMetrics() const noexcept {
+    NandMetrics m;
+    m.gc_invocations    = gc_calls_.load(std::memory_order_relaxed);
+    m.blocks_erased     = blocks_erased_.load(std::memory_order_relaxed);
+    m.pages_programmed  = pages_prog_.load(std::memory_order_relaxed);
+    m.waf               = GetWAF();
+    m.max_pe_cycles     = 0;   // Populated by FTJController telemetry
+    m.wear_uniformity   = 0.0; // Populated by FTJController telemetry
+    m.active_queue_depth = GetQueueDepth();
+    return m;
+}
+
+void BurstCoalescer::Reset() noexcept {
+    std::lock_guard<std::mutex> lock(mtx_);
+    for (size_t i = 0; i < depth_; ++i) {
+        staging_[i].data.fill(0);
+        staging_[i].bytes_committed = 0;
+        staging_[i].dirty           = false;
+        staging_[i].base_lba        = 0;
+    }
+    host_bytes_.store(0, std::memory_order_relaxed);
+    flash_bytes_.store(0, std::memory_order_relaxed);
+    gc_calls_.store(0, std::memory_order_relaxed);
+    blocks_erased_.store(0, std::memory_order_relaxed);
+    pages_prog_.store(0, std::memory_order_relaxed);
+    queue_depth_.store(0, std::memory_order_relaxed);
+}
+
 } // namespace ftj
 

@@ -1,0 +1,44 @@
+# ================================================================
+# synthesize.ys  —  FTJ SSD Controller IP Block
+# Yosys RTL Synthesis Script
+# Target: Generic 130nm-class standard cells (bundled Liberty)
+# Invocation: Run from repo root: yosys scripts/synthesize.ys
+# Windows-native: forward-slash paths only
+# ================================================================
+
+# ── 1. Read HDL source files (forward-slash relative paths) ──
+read_verilog -sv hdl/ftj_submission_queue.v
+read_verilog -sv hdl/nand_flash_model.v
+read_verilog -sv hdl/ftj_top_controller.v
+
+# ── 2. Elaborate and check hierarchy ─────────────────────────
+hierarchy -check -top ftj_top_controller
+
+# ── 3. Convert processes to netlists ─────────────────────────
+proc
+
+# ── 4. Flatten design hierarchy ──────────────────────────────
+flatten
+
+# ── 5. Technology-independent optimizations ──────────────────
+opt -full
+memory
+opt -full
+techmap
+opt -fast
+
+# ── 6. Register mapping to DFF_X1 ────────────────────────────
+dfflibmap -liberty scripts/generic_cells.lib
+
+# ── 7. Combinational gate mapping via ABC ────────────────────
+abc -liberty scripts/generic_cells.lib
+
+# ── 8. Post-mapping cleanup ───────────────────────────────────
+opt_clean -purge
+clean
+
+# ── 9. Write gate-level netlist ───────────────────────────────
+write_verilog -noattr scripts/output/ftj_top_controller_netlist.v
+
+# ── 10. Generate PPA statistics report ───────────────────────
+tee -o scripts/output/synthesis_report.log stat -liberty scripts/generic_cells.lib
