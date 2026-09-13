@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Shreyas Sengupta. All Rights Reserved.
+// PROPRIETARY AND CONFIDENTIAL. UNAUTHORIZED COPYING OR DISTRIBUTION IS STRICTLY PROHIBITED.
 `ifndef NVME_FLASH_IF_SV
 `define NVME_FLASH_IF_SV
 // nvme_flash_if.sv

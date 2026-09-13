@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Shreyas Sengupta. All Rights Reserved.
+// PROPRIETARY AND CONFIDENTIAL. UNAUTHORIZED COPYING OR DISTRIBUTION IS STRICTLY PROHIBITED.
 // nand_flash_model.v
 // Synthesizable 3D NAND Flash Behavioral Model (ONFI 4.2 subset)
 // Supports: Page Program, Page Read, Block Erase

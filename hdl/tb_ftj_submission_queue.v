@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Shreyas Sengupta. All Rights Reserved.
+// PROPRIETARY AND CONFIDENTIAL. UNAUTHORIZED COPYING OR DISTRIBUTION IS STRICTLY PROHIBITED.
 // =================================================================
 // Project: FTJ Memory Controller - FPGA Testbench
 // Module Name: tb_ftj_submission_queue
