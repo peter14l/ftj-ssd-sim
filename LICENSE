@@ -1,0 +1,28 @@
+# PROPRIETARY & SOURCE-AVAILABLE RESEARCH LICENSE
+
+**Copyright (c) 2026. All Rights Reserved.**
+**Project:** HyperRAM™ & FTJ-SSD-Sim Core Memory Architecture
+**Author / Inventor:** All IP, RTL, and Algorithms Retained by Repository Owner.
+
+---
+
+### 1. GRANT OF EVALUATION LICENSE
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to inspect, compile, and run the Software **EXCLUSIVELY FOR ACADEMIC, RESEARCH, AND NON-COMMERCIAL EVALUATION PURPOSES**.
+
+### 2. RESTRICTIONS & PROHIBITIONS
+You may **NOT**:
+1. **Commercial Use**: Manufacture, tape-out, synthesize for production silicon, sell, resell, lease, sublicense, or distribute this software, RTL cores, or derived hardware designs for any commercial gain or product without a prior written commercial license agreement from the copyright holder.
+2. **Reverse Engineering & Derivative Products**: Use this architecture, Verilog HDL designs, BDI compression algorithms, or memory simulation engines to build a competing commercial product or semiconductor IP core.
+3. **Attribution Removal**: Remove, alter, or obscure any copyright notice, patent pending notification, trademark, or terms of use contained within this repository or generated binary outputs.
+4. **Relicensing / Claiming Ownership**: Re-upload, publish, or present this codebase or its contents under another name, organization, or open-source license (e.g., MIT, Apache, GPL).
+
+### 3. PATENT & INTELLECTUAL PROPERTY NOTICE
+The algorithms, circuit top-levels, Memory Line Table (MLT) structures, and compression-coalescing controller architectures described in this repository represent **Proprietary Intellectual Property and Patent-Pending Trade Secrets**. 
+
+### 4. COMMERCIAL LICENSING & INQUIRIES
+For commercial licensing, semiconductor foundry tape-out rights, or venture partnership inquiries, please contact the repository owner directly.
+
+---
+
+### 5. DISCLAIMER OF WARRANTY
+THE SOFTWARE AND HARDWARE DESIGNS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

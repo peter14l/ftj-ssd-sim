@@ -88,7 +88,11 @@ Double-click [`docs/dashboard.html`](file:///D:/FTJ-SSD-Sim/docs/dashboard.html)
 
 ---
 
-## 📄 License & IP Notice
+## 📄 Intellectual Property, Patent Notice & License
 
-Copyright © 2026. All Rights Reserved.  
-This project contains proprietary simulation algorithms and hardware controller architectures. For evaluation or academic inquiries, please contact the repository owner.
+**Copyright © 2026. All Rights Reserved.**  
+This repository contains **Proprietary Intellectual Property, Synthesizable RTL, and Patent-Pending Architectures** for FTJ-based memory systems and HyperRAM hardware controllers.
+
+* **Non-Commercial / Evaluation License**: Permitted strictly for academic research and personal evaluation.
+* **Commercial Restrictions**: Commercial use, ASIC tape-out, reverse engineering, unauthorized redistribution, or relicensing is **STRICTLY PROHIBITED** without an explicit written license agreement.
+* See [`LICENSE`](file:///D:/FTJ-SSD-Sim/LICENSE) for complete legal terms. For enterprise licensing, IP integration, or grant inquiries, contact the repository owner.
