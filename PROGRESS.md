@@ -2,6 +2,19 @@
 
 ## Progress Log
 - [x] Repository Initialized
+- [x] **Stage 6: In-Line Hardware Compression Engine — COMPLETE (2026-09-22)**
+
+## Stage 6: Write-Path Compression Integration  ✅ COMPLETE
+21. [x] Design and implement `hdl/ftj_compressor.v` — synthesizable streaming zero-suppression and run-length compression engine targeting write-path WAF reduction.
+22. [x] Implement `hdl/ftj_chip_top.v` — production-grade top-level chip integration wrapper with 4-stage write-path pipeline (BDI → Serializer → Compressor → Assembler → Controller).
+23. [x] Update `scripts/synthesize.ys` to include all Stage 6 modules, switching synthesis root to `ftj_chip_top`.
+24. [x] Write and verify `hdl/tb_ftj_compressor.v` — all 4 tests PASSED (0 errors).
+25. [x] Implement `hdl/ftj_bdi_encoder.v` — combinational 64-bit BDI encoder with TYPE_ZERO (8→1B), TYPE_UNIFORM (8→2B), TYPE_BASE4 (8→6B), TYPE_RAW (8→8B) and telemetry outputs.
+26. [x] Implement `hdl/ftj_word_serializer.v` — 64-bit compressed word → byte-stream FSM with AXI-stream handshaking and back-pressure.
+27. [x] Implement `hdl/ftj_byte_assembler.v` — byte-stream → 64-bit word reassembler with correct `wstrb` mask and partial-burst flush on `in_last`.
+28. [x] Write and verify `hdl/tb_ftj_stage6.v` — comprehensive 9-test suite covering BDI unit tests, serializer, assembler, full pipeline integration, and back-pressure. **All 9 PASSED (0 errors).**
+
+
 
 ## Stage 2: Core Engine Development
 1. [x] Implement the `FtjMemoryController` (implemented as `FTJController`) core class and backing store management.

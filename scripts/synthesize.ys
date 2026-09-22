@@ -10,9 +10,14 @@
 read_verilog -sv hdl/ftj_submission_queue.v
 read_verilog -sv hdl/nand_flash_model.v
 read_verilog -sv hdl/ftj_top_controller.v
+read_verilog -sv hdl/ftj_compressor.v
+read_verilog -sv hdl/ftj_chip_top.v
 
 # ── 2. Elaborate and check hierarchy ─────────────────────────
-hierarchy -check -top ftj_top_controller
+# ftj_chip_top is the new unified top-level integrating:
+#   ftj_compressor (in-line write-path zero-suppression compression)
+#   ftj_top_controller (AXI4 memory controller with ECC, GC, AFE, HAR-SM)
+hierarchy -check -top ftj_chip_top
 
 # ── 3. Convert processes to netlists ─────────────────────────
 proc

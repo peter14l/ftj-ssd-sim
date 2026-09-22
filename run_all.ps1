@@ -17,20 +17,17 @@ powershell -ExecutionPolicy Bypass -File "build.ps1" -RunTests -RunBenchmarks
 
 # 3. Build HyperRAM Optimizer & Compression Engine
 Write-Host "`n[*] Step 3: Building and Testing HyperRAM Compressed Engine..." -ForegroundColor Yellow
-Set-Location hyper_ram
-powershell -ExecutionPolicy Bypass -File "build_optimizer.ps1"
+powershell -ExecutionPolicy Bypass -File "hyper_ram\scripts\build_optimizer.ps1"
 
 # 4. Run HyperRAM Tests & CLI Benchmarks if built
-if (Test-Path "build\Release\hyper_ram_tests.exe") {
+if (Test-Path "hyper_ram\build\Release\hyper_ram_tests.exe") {
     Write-Host "`n[*] Running HyperRAM Lossless Verification Suite:" -ForegroundColor Green
-    & ".\build\Release\hyper_ram_tests.exe"
+    & ".\hyper_ram\build\Release\hyper_ram_tests.exe"
 }
-if (Test-Path "build\Release\hyper_ram_sim.exe") {
+if (Test-Path "hyper_ram\build\Release\hyper_ram_sim.exe") {
     Write-Host "`n[*] Running HyperRAM Virtual Doubler Benchmarks:" -ForegroundColor Green
-    & ".\build\Release\hyper_ram_sim.exe"
+    & ".\hyper_ram\build\Release\hyper_ram_sim.exe"
 }
-
-Set-Location ..
 
 Write-Host "`n========================================================================" -ForegroundColor Green
 Write-Host "       ALL VERIFICATIONS, BUILDS & RUNS COMPLETED SUCCESSFULLY!         " -ForegroundColor Green

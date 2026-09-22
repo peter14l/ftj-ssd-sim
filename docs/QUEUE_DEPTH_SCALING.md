@@ -6,11 +6,11 @@ This document presents the latency profile and throughput metrics of the FTJ Mem
 
 | Queue Depth (QD) | IOPS | Throughput (MB/s) | p50 Latency (ns) | p99 Latency (ns) | p99.9 Latency (ns) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| QD-1 | 655 | 2.56 | 440400.0 | 1388000.0 | 9262200.0 |
-| QD-4 | 1648 | 6.44 | 455300.0 | 14539700.0 | 407677300.0 |
-| QD-16 | 1799 | 7.03 | 441500.0 | 21400400.0 | 515368900.0 |
-| QD-32 | 1400 | 5.47 | 871500.0 | 36293000.0 | 1163130300.0 |
-| QD-64 | 1856 | 7.25 | 439900.0 | 25361500.0 | 638727200.0 |
+| QD-1 | 1870 | 7.31 | 439300.0 | 971700.0 | 1361500.0 |
+| QD-4 | 1588 | 6.20 | 489500.0 | 12857300.0 | 465141300.0 |
+| QD-16 | 1706 | 6.66 | 448100.0 | 38269000.0 | 750470900.0 |
+| QD-32 | 1454 | 5.68 | 863700.0 | 32429400.0 | 1124412200.0 |
+| QD-64 | 1449 | 5.66 | 862800.0 | 28221400.0 | 603985600.0 |
 
 ## Architecture Insights
 - Lock-free atomic submission and completion queue design prevents lock contention.

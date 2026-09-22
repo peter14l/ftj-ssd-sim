@@ -6,18 +6,18 @@ This document presents the performance metrics of the simulated byte-addressable
 
 | Benchmark Name | Operations | IOPS | Avg Latency (ns) | Throughput (MB/s) |
 | :--- | :---: | :---: | :---: | :---: |
-| Random 4K Writes (FTJ) | 50000 | 2733 | 365850.6 | 10.68 |
-| Sequential 256B R/W (FTJ) | 200000 | 45653 | 21904.4 | 11.15 |
-| Mixed 70/30 (4K FTJ) | 100000 | 3420 | 292416.5 | 13.36 |
-| QD-1 NVMe Queue | 50000 | 655 | 440400.0 | 2.56 |
-| QD-4 NVMe Queue | 50000 | 1648 | 455300.0 | 6.44 |
-| QD-16 NVMe Queue | 50000 | 1799 | 441500.0 | 7.03 |
-| QD-32 NVMe Queue | 50000 | 1400 | 871500.0 | 5.47 |
-| QD-64 NVMe Queue | 50000 | 1856 | 439900.0 | 7.25 |
+| Random 4K Writes (FTJ) | 50000 | 2656 | 376479.7 | 10.38 |
+| Sequential 256B R/W (FTJ) | 200000 | 42512 | 23522.8 | 10.38 |
+| Mixed 70/30 (4K FTJ) | 100000 | 5358 | 186632.6 | 20.93 |
+| QD-1 NVMe Queue | 50000 | 1870 | 439300.0 | 7.31 |
+| QD-4 NVMe Queue | 50000 | 1588 | 489500.0 | 6.20 |
+| QD-16 NVMe Queue | 50000 | 1706 | 448100.0 | 6.66 |
+| QD-32 NVMe Queue | 50000 | 1454 | 863700.0 | 5.68 |
+| QD-64 NVMe Queue | 50000 | 1449 | 862800.0 | 5.66 |
 | NAND-Comparison (FTJ Mode) | 20000 | 3333333 | 300.0 | 13020.83 |
 | NAND-Comparison (3D NAND Mode) | 20000 | 6812 | 146800.0 | 26.61 |
-| Wear/ECC Recovered Reads | 10000 | 1350074 | 740.7 | 10.30 |
-| Crossbar Physics & IR-Drop Stress (85C) | 15000 | 2939 | 237.2 | 11.48 |
+| Wear/ECC Recovered Reads | 10000 | 1297337 | 770.8 | 9.90 |
+| Crossbar Physics & IR-Drop Stress (85C) | 15000 | 2759 | 237.2 | 10.78 |
 
 ## Analysis & Comparison
 
